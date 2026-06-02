@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+.env
+deployed.json
+node_modules
+.next
+dist
+*.wasm

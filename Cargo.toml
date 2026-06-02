@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/types",
+    "contracts/property_registry",
+    "contracts/fraction_vault",
+    "contracts/rent_distributor",
+    "contracts/mortgage_pool",
+    "contracts/payment_bridge",
+    "contracts/oracle_adapter",
+    "contracts/compliance_registry",
+    "contracts/governance",
+]
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+lto = true
+debug = 0
+codegen-units = 1

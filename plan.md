@@ -1,0 +1,203 @@
+# PropFi — 14-Day Build Plan to 60%
+
+## Overview
+
+Build all 8 Soroban smart contracts with full test coverage, cross-contract integration,
+a TypeScript SDK, deployment scripts, basic indexer, minimal frontend scaffold, and CI/CD.
+Target: **60% complete** — a robust foundation for contributors.
+
+---
+
+## Week 1: Smart Contracts (Core Protocol)
+
+### Day 1 — Workspace & Shared Foundation
+
+- [ ] `Cargo.toml` workspace manifest (root)
+- [ ] All 8 contract directories with `Cargo.toml` + `src/lib.rs` stubs
+- [ ] Shared types crate: `PropertyData`, `PropertyStatus`, `HealthFactor`, `PriceData`, `JurisdictionRules`, `GovernanceAction`, `PathQuote`
+- [ ] `soroban-sdk` dependency aligned across all contracts
+- [ ] `rust-toolchain.toml` (stable 1.75+)
+- [ ] `wasm32-unknown-unknown` target configured
+- [ ] Empty `cargo build` passing
+
+### Day 2 — ComplianceRegistry (full implementation)
+
+- [ ] Data model: `Attestation` map (user → proof_hash, jurisdiction, expiry, active)
+- [ ] Functions: `attest`, `is_compliant`, `revoke`, `set_jurisdiction_rules`, `attestation_expiry`
+- [ ] Events: `Attested`, `Revoked`, `RulesUpdated`
+- [ ] Unit tests: attest flow, expiry, revocation, jurisdiction filtering, admin gating
+- [ ] **Deliverable:** 1st contract done, tested, building
+
+### Day 3 — OracleAdapter (full implementation)
+
+- [ ] Data model: `PriceData` per asset, oracle registry with weights, TWAP accumulator
+- [ ] Functions: `submit_price`, `get_price`, `add_oracle`, `twap`
+- [ ] Events: `PriceUpdated`, `OracleAdded`, `StaleAlert`
+- [ ] Staleness detection (configurable threshold)
+- [ ] Unit tests: price submission, weighted aggregation, TWAP over window, staleness
+- [ ] **Deliverable:** 2nd contract done
+
+### Day 4 — PropertyRegistry (full implementation)
+
+- [ ] Data model: property map (ID → owner, valuation, doc_hash, status, timestamps)
+- [ ] Functions: `register_property`, `update_valuation`, `transfer_ownership`, `get_property`, `set_status`
+- [ ] Cross-contract: `OracleAdapter.get_price` for valuation verification
+- [ ] Cross-contract: `ComplianceRegistry.is_compliant` for ownership transfer
+- [ ] Events: `PropertyRegistered`, `ValuationUpdated`, `OwnershipTransferred`
+- [ ] Unit tests: full lifecycle — register, update valuation, transfer, status changes, error cases
+- [ ] **Deliverable:** 3rd contract done
+
+### Day 5 — FractionVault (full implementation)
+
+- [ ] Data model: fraction supply per property, balances map (user × property → amount), holder tracking
+- [ ] Functions: `fractionalize`, `buy_fraction`, `sell_fraction`, `get_balance`, `total_holders`
+- [ ] Cross-contract: `PropertyRegistry.get_property` (validate property exists)
+- [ ] Cross-contract: `ComplianceRegistry.is_compliant` (gate buys)
+- [ ] Stellar token transfer for buy/sell settlement
+- [ ] Events: `Fractionalized`, `FractionPurchased`, `FractionSold`
+- [ ] Unit tests: fractionalization, buy, sell with min_price, holder tracking, insufficient balance, compliance gating
+- [ ] **Deliverable:** 4th contract done
+
+### Day 6 — RentDistributor + MortgagePool (full implementation)
+
+**RentDistributor:**
+
+- [ ] Deposit tracking per property, pro-rata distribution algorithm
+- [ ] Functions: `deposit_rent`, `distribute`, `claim`, `set_schedule`, `pending_yield`
+- [ ] Cross-contract: `FractionVault.get_balance` + `FractionVault.total_holders` for pro-rata
+- [ ] Events: `RentDeposited`, `YieldDistributed`, `YieldClaimed`
+- [ ] Unit tests: single deposit + distribute, multiple deposits, partial claims
+
+**MortgagePool:**
+
+- [ ] Loan data model, liquidity pool, LTV gating (max 70%), liquidation (80% threshold), interest accrual
+- [ ] Functions: `open_loan`, `repay`, `liquidate`, `deposit_liquidity`, `withdraw_liquidity`, `loan_health`
+- [ ] Cross-contract: `OracleAdapter.get_price` for LTV, `PropertyRegistry.get_property` for valuation
+- [ ] Events: `LoanOpened`, `Repaid`, `Liquidated`, `LiquidityDeposited`
+- [ ] Unit tests: open loan, repay, liquidation trigger, LTV enforcement, health factor
+- [ ] **Deliverable:** 2 more contracts done (6 total)
+
+### Day 7 — PaymentBridge + Governance (full implementation)
+
+**PaymentBridge:**
+
+- [ ] Asset abstraction (XLM/USDC/etc.), send, batch_send, anchor registration, path estimation
+- [ ] Functions: `send`, `batch_send`, `register_anchor`, `estimate_path`
+- [ ] Events: `PaymentSent`, `BatchDispatched`, `AnchorRegistered`
+- [ ] Unit tests: single send, batch dispatch, anchor whitelist, insufficient balance
+
+**Governance:**
+
+- [ ] Proposal lifecycle: Proposed → Voting (48h) → Queued (24h timelock) → Executed
+- [ ] Functions: `propose`, `vote`, `execute`, `voting_power`
+- [ ] Cross-contract: `FractionVault.get_balance` for voting power
+- [ ] Events: `ProposalCreated`, `Voted`, `ProposalExecuted`
+- [ ] Unit tests: propose, vote (for/against), quorum met/failed, timelock enforcement, execution
+- [ ] **Deliverable:** All 8 contracts implemented and unit-tested
+
+---
+
+## Week 2: Integration, SDK, Infrastructure
+
+### Day 8 — Cross-Contract Integration Tests
+
+- [ ] `tests/integration/` directory with Rust integration test suite
+- [ ] Test helper library: deploy contracts, admin setup, assertion helpers
+- [ ] Full flows:
+  - Register property → fractionalize → buy fraction → sell fraction
+  - Deposit rent → distribute → claim yield
+  - Open loan → check health → repay / trigger liquidation
+  - Cross-border payment via PaymentBridge
+  - Compliance gate blocks non-attested users across all contracts
+  - Governance: propose → vote → queue → execute
+- [ ] **Deliverable:** Integration test suite covering all major protocol flows
+
+### Day 9 — TypeScript SDK (core clients)
+
+- [ ] `sdk/` directory with `package.json`, `tsconfig.json`
+- [ ] Contract client classes (build + sign Soroban transactions, type-safe wrappers)
+- [ ] Clients for: PropertyRegistry, FractionVault, ComplianceRegistry, MortgagePool (at minimum)
+- [ ] `sdk/src/types/`: mirrors Rust types in TypeScript
+- [ ] `sdk/src/index.ts`: unified export with `createPropFi` factory
+- [ ] Basic usage README
+- [ ] `npm run build` passing
+- [ ] **Deliverable:** SDK with 4 contract clients
+
+### Day 10 — Deployment Scripts & Environment
+
+- [ ] `scripts/deploy.sh`:
+  - Deploy all 8 contracts in dependency order
+  - Write addresses to `deployed.json`
+  - Initialize protocol (admin, jurisdiction rules, oracles)
+  - `--network testnet` and `--network mainnet` flags
+- [ ] `scripts/setup_testnet.sh`: fund accounts, generate keys, env setup
+- [ ] `scripts/seed_data.ts`: seed sample properties, fractions, rent deposits
+- [ ] `.env.example` with all required vars
+- [ ] `docker-compose.yml` for local Stellar + PostgreSQL
+- [ ] **Deliverable:** One-command deployment to testnet
+
+### Day 11 — Indexer (basic event ingestion)
+
+- [ ] `indexer/` with Node.js/TypeScript + Prisma
+- [ ] Prisma schema: `Property`, `FractionBalance`, `RentDistribution`, `Loan`, `Attestation`, `Proposal`
+- [ ] Horizon event stream listener
+- [ ] Handlers for key events (PropertyRegistered, Fractionalized, etc.)
+- [ ] PostgreSQL migrations
+- [ ] `npm run dev` starts the indexer
+- [ ] **Deliverable:** Indexer ingesting events into PostgreSQL
+
+### Day 12 — CI/CD & Code Quality
+
+- [ ] `.github/workflows/ci.yml`:
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `cargo clippy -- -D warnings`
+  - `cargo fmt --check`
+- [ ] `.github/workflows/deploy.yml`:
+  - Deploy to testnet on push to `main`
+  - Deploy to mainnet on tag push
+- [ ] `.github/dependabot.yml` (Rust + npm)
+- [ ] `CONTRIBUTING.md` with coding standards, PR process
+- [ ] `.gitignore` (Rust + Node.js patterns)
+- [ ] **Deliverable:** CI green on every PR
+
+### Day 13 — Frontend Scaffold (minimal)
+
+- [ ] `frontend/` with Next.js 14, TailwindCSS, shadcn/ui
+- [ ] Freighter wallet connection component
+- [ ] 3 core pages (routes + data fetching via SDK):
+  - `/dashboard` — portfolio overview
+  - `/properties` — browse tokenized properties
+  - `/compliance` — KYC attestation flow
+- [ ] Strongly-typed API layer using the SDK
+- [ ] Basic layout with navigation
+- [ ] `npm run dev` passing
+- [ ] **Deliverable:** Frontend scaffold with wallet connect + 3 pages
+
+### Day 14 — Polish, Buffer & Documentation
+
+- [ ] Bug fixes from integration testing
+- [ ] README.md updated with actual build/run commands
+- [ ] Rustdoc API docs for each contract
+- [ ] SDK usage examples in README
+- [ ] Verify `cargo test --workspace` 100% green
+- [ ] Verify `npm run build` for SDK, indexer, frontend
+- [ ] Verify `./scripts/deploy.sh --network testnet` works
+- [ ] **Deliverable:** Shipping-quality repo with passing CI
+
+---
+
+## 60% Completion — Deliverables Summary
+
+| Component | Status |
+|---|---|
+| 8 Soroban contracts (all functions, events, cross-contract calls) | 100% |
+| Unit tests per contract | 100% |
+| Integration tests (major flows) | 80% |
+| TypeScript SDK (core clients) | 60% |
+| Deployment scripts (testnet ready) | 100% |
+| Indexer (basic event ingestion) | 50% |
+| Frontend (scaffold + 3 pages) | 30% |
+| CI/CD pipelines | 100% |
+| Documentation (README, rustdoc) | 50% |
+| **Overall** | **~60%** |
