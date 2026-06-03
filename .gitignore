@@ -6,3 +6,4 @@ node_modules
 .next
 dist
 *.wasm
+test_snapshots/

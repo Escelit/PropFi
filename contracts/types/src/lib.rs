@@ -1,7 +1,8 @@
 #![no_std]
-use soroban_sdk::{Address, BytesN, Symbol, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Symbol, Vec};
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub enum PropertyStatus {
     Active,
     Inactive,
@@ -9,6 +10,7 @@ pub enum PropertyStatus {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct PropertyData {
     pub owner: Address,
     pub valuation: i128,
@@ -19,6 +21,7 @@ pub struct PropertyData {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct PriceData {
     pub price: i128,
     pub timestamp: u64,
@@ -26,12 +29,14 @@ pub struct PriceData {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct HealthFactor {
     pub ratio: u32,
     pub is_healthy: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct JurisdictionRules {
     pub min_attestation_days: u32,
     pub required_level: u32,
