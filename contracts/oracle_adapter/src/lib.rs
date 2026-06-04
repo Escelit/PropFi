@@ -264,3 +264,191 @@ impl OracleAdapter {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::Ledger;
+    use soroban_sdk::{Address, Env, Symbol};
+
+    fn setup() -> (Env, Address, Address, OracleAdapterClient<'static>) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let oracle = Address::generate(&env);
+
+        let contract_id = env.register_contract(None, OracleAdapter);
+        let client = OracleAdapterClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &86400u64);
+
+        (env, admin, oracle, client)
+    }
+
+    fn setup_with_oracle(
+    ) -> (Env, Address, Address, Symbol, OracleAdapterClient<'static>) {
+        let (env, admin, oracle, client) = setup();
+        let asset = Symbol::new(&env, "BTC_USD");
+
+        client.add_oracle(&oracle, &100u32);
+
+        (env, oracle, admin, asset, client)
+    }
+
+    #[test]
+    fn test_initialize() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, OracleAdapter);
+        let client = OracleAdapterClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &3600u64);
+    }
+
+    #[test]
+    #[should_panic(expected = "already initialized")]
+    fn test_double_initialize_panics() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, OracleAdapter);
+        let client = OracleAdapterClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &3600u64);
+        client.initialize(&admin, &3600u64);
+    }
+
+    #[test]
+    fn test_add_oracle() {
+        let (_env, _admin, oracle, client) = setup();
+
+        client.add_oracle(&oracle, &100u32);
+
+        let info = client.get_oracle_info(&oracle);
+        assert_eq!(info.weight, 100);
+        assert!(info.active);
+    }
+
+    #[test]
+    fn test_remove_oracle() {
+        let (_env, _admin, oracle, client) = setup();
+
+        client.add_oracle(&oracle, &100u32);
+        client.remove_oracle(&oracle);
+
+        let info = client.get_oracle_info(&oracle);
+        assert!(!info.active);
+        assert_eq!(info.weight, 100);
+    }
+
+    #[test]
+    fn test_price_submission() {
+        let (_env, oracle, _admin, asset, client) = setup_with_oracle();
+
+        client.submit_price(&oracle, &asset, &50000i128);
+
+        let price_data = client.get_price(&asset);
+        assert_eq!(price_data.price, 50000);
+        assert_eq!(price_data.oracle_count, 1);
+    }
+
+    #[test]
+    fn test_weighted_aggregation() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let oracle1 = Address::generate(&env);
+        let oracle2 = Address::generate(&env);
+
+        let contract_id = env.register_contract(None, OracleAdapter);
+        let client = OracleAdapterClient::new(&env, &contract_id);
+
+        let asset = Symbol::new(&env, "BTC_USD");
+
+        client.initialize(&admin, &86400u64);
+        client.add_oracle(&oracle1, &200u32);
+        client.add_oracle(&oracle2, &100u32);
+
+        client.submit_price(&oracle1, &asset, &50000i128);
+        client.submit_price(&oracle2, &asset, &50600i128);
+
+        let price_data = client.get_price(&asset);
+        let expected = (50000 * 200 + 50600 * 100) / 300;
+        assert_eq!(price_data.price, expected);
+        assert_eq!(price_data.oracle_count, 2);
+    }
+
+    #[test]
+    fn test_oracle_update_price() {
+        let (_env, oracle, _admin, asset, client) = setup_with_oracle();
+
+        client.submit_price(&oracle, &asset, &50000i128);
+        client.submit_price(&oracle, &asset, &51000i128);
+
+        let price_data = client.get_price(&asset);
+        assert_eq!(price_data.price, 51000);
+        assert_eq!(price_data.oracle_count, 1);
+    }
+
+    #[test]
+    fn test_staleness() {
+        let (env, oracle, _admin, asset, client) = setup_with_oracle();
+
+        client.submit_price(&oracle, &asset, &50000i128);
+
+        env.ledger().set_timestamp(env.ledger().timestamp() + 90000);
+
+        let price_data = client.get_price(&asset);
+        assert_eq!(price_data.price, 50000);
+        assert_eq!(price_data.oracle_count, 1);
+    }
+
+    #[test]
+    fn test_twap_over_window() {
+        let (env, oracle, _admin, asset, client) = setup_with_oracle();
+
+        let base = env.ledger().timestamp();
+
+        env.ledger().set_timestamp(base);
+        client.submit_price(&oracle, &asset, &50000i128);
+
+        env.ledger().set_timestamp(base + 1000);
+        client.submit_price(&oracle, &asset, &51000i128);
+
+        env.ledger().set_timestamp(base + 2000);
+        client.submit_price(&oracle, &asset, &52000i128);
+
+        let twap = client.twap(&asset, &3000u64);
+        assert!(twap > 0);
+    }
+
+    #[test]
+    fn test_twap_no_samples() {
+        let (_env, _oracle, _admin, asset, client) = setup_with_oracle();
+        let twap = client.twap(&asset, &3600u64);
+        assert_eq!(twap, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "oracle not registered")]
+    fn test_unregistered_oracle_cannot_submit() {
+        let (env, _admin, _oracle, client) = setup();
+        let asset = Symbol::new(&env, "BTC_USD");
+        let rogue = Address::generate(&env);
+        client.submit_price(&rogue, &asset, &50000i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "oracle not active")]
+    fn test_removed_oracle_cannot_submit() {
+        let (_env, oracle, _admin, asset, client) = setup_with_oracle();
+        client.remove_oracle(&oracle);
+        client.submit_price(&oracle, &asset, &50000i128);
+    }
+}
+
