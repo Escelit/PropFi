@@ -1,6 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, Address, BytesN, Env, Symbol};
-use propfi_types::{PropertyData, PropertyStatus};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, Address, BytesN, Env, Symbol, Vec};
+use propfi_types::{PriceData, PropertyData, PropertyStatus};
+
+const MAX_VALUATION_DEVIATION_BPS: i128 = 2000;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -85,7 +87,13 @@ impl PropertyRegistry {
         counter
     }
 
-    pub fn update_valuation(env: Env, prop_id: u64, new_val: i128) {
+    pub fn update_valuation(
+        env: Env,
+        prop_id: u64,
+        new_val: i128,
+        oracle_contract: Address,
+        asset: Symbol,
+    ) {
         let mut property: PropertyData = env
             .storage()
             .instance()
@@ -96,6 +104,27 @@ impl PropertyRegistry {
 
         if new_val <= 0 {
             panic!("invalid valuation");
+        }
+
+        let price_data: PriceData = env.invoke_contract(
+            &oracle_contract,
+            &Symbol::new(&env, "get_price"),
+            Vec::from_array(&env, [asset.to_val()]),
+        );
+
+        if price_data.price <= 0 {
+            panic!("oracle price not available");
+        }
+
+        let deviation = if new_val > price_data.price {
+            new_val - price_data.price
+        } else {
+            price_data.price - new_val
+        };
+
+        let max_deviation = price_data.price * MAX_VALUATION_DEVIATION_BPS / 10000;
+        if deviation > max_deviation {
+            panic!("valuation out of oracle range");
         }
 
         property.valuation = new_val;
@@ -110,7 +139,7 @@ impl PropertyRegistry {
         );
     }
 
-    pub fn transfer_ownership(env: Env, prop_id: u64, to: Address) {
+    pub fn transfer_ownership(env: Env, prop_id: u64, to: Address, compliance_contract: Address) {
         let mut property: PropertyData = env
             .storage()
             .instance()
@@ -118,6 +147,22 @@ impl PropertyRegistry {
             .unwrap_or_else(|| panic!("property not found"));
 
         property.owner.require_auth();
+
+        let jurisdiction: Symbol = env
+            .storage()
+            .instance()
+            .get(&DataKey::Jurisdiction(prop_id))
+            .unwrap();
+
+        let compliant: bool = env.invoke_contract(
+            &compliance_contract,
+            &Symbol::new(&env, "is_compliant"),
+            Vec::from_array(&env, [to.to_val(), jurisdiction.to_val()]),
+        );
+
+        if !compliant {
+            panic!("compliance check failed");
+        }
 
         let from = property.owner.clone();
         property.owner = to.clone();
