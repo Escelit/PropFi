@@ -592,6 +592,59 @@ mod test {
     }
 
     #[test]
+    fn test_multiple_buyers_holder_tracking() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+        sac.mint(&admin, &10_000_000i128);
+
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let buyer1 = Address::generate(&env);
+        let buyer2 = Address::generate(&env);
+        sac.mint(&buyer1, &100_000i128);
+        sac.mint(&buyer2, &100_000i128);
+        attest_buyer(&env, &compliance_id, &buyer1);
+        attest_buyer(&env, &compliance_id, &buyer2);
+
+        vault.buy_fraction(&buyer1, &prop_id, &10u128);
+        assert_eq!(vault.total_holders(&prop_id), 1);
+
+        vault.buy_fraction(&buyer2, &prop_id, &5u128);
+        assert_eq!(vault.total_holders(&prop_id), 2);
+
+        vault.sell_fraction(&buyer2, &prop_id, &5u128, &0i128);
+        assert_eq!(vault.total_holders(&prop_id), 1);
+
+        vault.sell_fraction(&buyer1, &prop_id, &10u128, &0i128);
+        assert_eq!(vault.total_holders(&prop_id), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "transfer")]
+    fn test_buy_fraction_insufficient_token_balance() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let buyer = Address::generate(&env);
+        attest_buyer(&env, &compliance_id, &buyer);
+        vault.buy_fraction(&buyer, &prop_id, &10u128);
+    }
+
+    #[test]
     fn test_buy_fraction_multiple_purchases() {
         let (env, admin, owner) = setup_base();
         let prop_id = 1u64;
