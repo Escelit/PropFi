@@ -169,6 +169,64 @@ impl FractionVault {
             (buyer, amount, payment),
         );
     }
+
+    pub fn sell_fraction(
+        env: Env,
+        seller: Address,
+        prop_id: u64,
+        amount: u128,
+        min_price: i128,
+    ) {
+        seller.require_auth();
+
+        if amount == 0 {
+            panic!("amount must be positive");
+        }
+
+        let info: FractionInfo = env
+            .storage()
+            .instance()
+            .get(&DataKey::FractionInfo(prop_id))
+            .unwrap_or_else(|| panic!("property not fractionalized"));
+
+        let key = DataKey::Balance(seller.clone(), prop_id);
+        let balance: u128 = env.storage().instance().get(&key).unwrap_or(0);
+        if balance < amount {
+            panic!("insufficient balance");
+        }
+
+        let payout = (amount as i128).checked_mul(info.price).unwrap();
+        if payout < min_price {
+            panic!("price too low");
+        }
+
+        let new_balance = balance.checked_sub(amount).unwrap();
+        env.storage().instance().set(&key, &new_balance);
+
+        if new_balance == 0 {
+            let holder_key = DataKey::IsHolder(seller.clone(), prop_id);
+            env.storage().instance().remove(&holder_key);
+            let count_key = DataKey::HolderCount(prop_id);
+            let count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
+            if count > 0 {
+                env.storage()
+                    .instance()
+                    .set(&count_key, &(count - 1));
+            }
+        }
+
+        let vault = env.current_contract_address();
+        env.invoke_contract::<()>(
+            &info.payment_token,
+            &Symbol::new(&env, "transfer"),
+            Vec::from_array(&env, [vault.to_val(), seller.to_val(), payout.into_val(&env)]),
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "FractionSold"), prop_id),
+            (seller, amount, payout),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -385,6 +443,152 @@ mod test {
 
         let buyer = Address::generate(&env);
         vault.buy_fraction(&buyer, &prop_id, &10u128);
+    }
+
+    #[test]
+    fn test_sell_fraction() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+        sac.mint(&admin, &1_000_000i128);
+
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let seller = Address::generate(&env);
+        sac.mint(&seller, &100_000i128);
+        attest_buyer(&env, &compliance_id, &seller);
+        vault.buy_fraction(&seller, &prop_id, &10u128);
+        assert_eq!(vault.get_balance(&seller, &prop_id), 10);
+
+        vault.sell_fraction(&seller, &prop_id, &4u128, &0i128);
+
+        assert_eq!(vault.get_balance(&seller, &prop_id), 6);
+        assert_eq!(vault.total_holders(&prop_id), 1);
+    }
+
+    #[test]
+    fn test_sell_fraction_removes_holder_on_zero() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+        sac.mint(&admin, &1_000_000i128);
+
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let seller = Address::generate(&env);
+        sac.mint(&seller, &100_000i128);
+        attest_buyer(&env, &compliance_id, &seller);
+        vault.buy_fraction(&seller, &prop_id, &5u128);
+        assert_eq!(vault.total_holders(&prop_id), 1);
+
+        vault.sell_fraction(&seller, &prop_id, &5u128, &0i128);
+
+        assert_eq!(vault.get_balance(&seller, &prop_id), 0);
+        assert_eq!(vault.total_holders(&prop_id), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "insufficient balance")]
+    fn test_sell_fraction_insufficient_balance() {
+        let (env, admin, owner) = setup_base();
+        let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        let vault = setup_vault(&env, &admin);
+        let token = setup_token(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let seller = Address::generate(&env);
+        vault.sell_fraction(&seller, &prop_id, &1u128, &0i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "property not fractionalized")]
+    fn test_sell_fraction_not_fractionalized() {
+        let (env, admin, _owner) = setup_base();
+        let vault = setup_vault(&env, &admin);
+        let seller = Address::generate(&env);
+        vault.sell_fraction(&seller, &1, &1u128, &0i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount must be positive")]
+    fn test_sell_fraction_zero_amount() {
+        let (env, admin, owner) = setup_base();
+        let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        let vault = setup_vault(&env, &admin);
+        let token = setup_token(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let seller = Address::generate(&env);
+        vault.sell_fraction(&seller, &prop_id, &0u128, &0i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "price too low")]
+    fn test_sell_fraction_min_price_not_met() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let seller = Address::generate(&env);
+        sac.mint(&seller, &100_000i128);
+        attest_buyer(&env, &compliance_id, &seller);
+        vault.buy_fraction(&seller, &prop_id, &10u128);
+
+        // Price is 100, selling 10 fractions = 1000 payout, but seller wants 2000 minimum
+        vault.sell_fraction(&seller, &prop_id, &10u128, &2000i128);
+    }
+
+    #[test]
+    fn test_buy_sell_full_lifecycle() {
+        let (env, admin, owner) = setup_base();
+        let prop_id = 1u64;
+
+        let token = setup_token(&env, &admin);
+        let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+        sac.mint(&admin, &10_000_000i128);
+
+        let (prop_id_reg, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
+        assert_eq!(prop_id_reg, prop_id);
+
+        let vault = setup_vault(&env, &admin);
+        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+
+        let user = Address::generate(&env);
+        sac.mint(&user, &1_000_000i128);
+        attest_buyer(&env, &compliance_id, &user);
+
+        vault.buy_fraction(&user, &prop_id, &50u128);
+        assert_eq!(vault.get_balance(&user, &prop_id), 50);
+
+        vault.sell_fraction(&user, &prop_id, &20u128, &0i128);
+        assert_eq!(vault.get_balance(&user, &prop_id), 30);
+
+        vault.buy_fraction(&user, &prop_id, &10u128);
+        assert_eq!(vault.get_balance(&user, &prop_id), 40);
+
+        vault.sell_fraction(&user, &prop_id, &40u128, &0i128);
+        assert_eq!(vault.get_balance(&user, &prop_id), 0);
+        assert_eq!(vault.total_holders(&prop_id), 0);
     }
 
     #[test]
