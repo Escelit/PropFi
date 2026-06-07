@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
 soroban-sdk = "21"
 propfi-types = { path = "../types" }
+propfi-fraction-vault = { path = "../fraction_vault" }
+propfi-property-registry = { path = "../property_registry" }
+propfi-compliance-registry = { path = "../compliance_registry" }
 
+[dev-dependencies]
+soroban-sdk = { version = "21", features = ["testutils"] }

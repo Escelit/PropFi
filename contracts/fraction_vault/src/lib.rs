@@ -104,6 +104,42 @@ impl FractionVault {
             .unwrap_or(0)
     }
 
+    pub fn get_fraction_info(env: Env, prop_id: u64) -> (u128, i128, Address, Address, Address) {
+        let info: FractionInfo = env
+            .storage()
+            .instance()
+            .get(&DataKey::FractionInfo(prop_id))
+            .unwrap_or_else(|| panic!("property not fractionalized"));
+        (
+            info.total_supply,
+            info.price,
+            info.payment_token,
+            info.property_registry,
+            info.compliance_registry,
+        )
+    }
+
+    pub fn set_rent_distributor(env: Env, distributor: Address) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+        env.storage().instance().set(&Symbol::new(&env, "rent_distributor"), &distributor);
+    }
+
+    fn checkpoint_yield(env: &Env, investor: &Address, prop_id: u64, balance: u128) {
+        if let Some(distributor) = env.storage().instance().get::<Symbol, Address>(&Symbol::new(env, "rent_distributor")) {
+            env.invoke_contract::<()>(
+                &distributor,
+                &Symbol::new(env, "checkpoint"),
+                Vec::from_array(env, [
+                    env.current_contract_address().to_val(),
+                    investor.to_val(),
+                    prop_id.into_val(env),
+                    balance.into_val(env),
+                ]),
+            );
+        }
+    }
+
     pub fn buy_fraction(env: Env, buyer: Address, prop_id: u64, amount: u128) {
         buyer.require_auth();
 
@@ -116,6 +152,12 @@ impl FractionVault {
             .instance()
             .get(&DataKey::FractionInfo(prop_id))
             .unwrap_or_else(|| panic!("property not fractionalized"));
+
+        let key = DataKey::Balance(buyer.clone(), prop_id);
+        let balance: u128 = env.storage().instance().get(&key).unwrap_or(0);
+
+        // Checkpoint before balance change
+        Self::checkpoint_yield(&env, &buyer, prop_id, balance);
 
         let _property: PropertyData = env.invoke_contract(
             &info.property_registry,
@@ -191,6 +233,10 @@ impl FractionVault {
 
         let key = DataKey::Balance(seller.clone(), prop_id);
         let balance: u128 = env.storage().instance().get(&key).unwrap_or(0);
+
+        // Checkpoint before balance change
+        Self::checkpoint_yield(&env, &seller, prop_id, balance);
+
         if balance < amount {
             panic!("insufficient balance");
         }
