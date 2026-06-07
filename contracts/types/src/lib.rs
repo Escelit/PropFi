@@ -30,8 +30,30 @@ pub struct PriceData {
 
 #[derive(Clone, Debug, PartialEq)]
 #[contracttype]
+pub enum LoanStatus {
+    Active,
+    Repaid,
+    Liquidated,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct LoanData {
+    pub prop_id: u64,
+    pub borrower: Address,
+    pub amount: i128,
+    pub collateral_valuation: i128,
+    pub ltv_bps: u32,
+    pub interest_rate_bps: u32,
+    pub created_at: u64,
+    pub last_repayment_at: u64,
+    pub status: LoanStatus,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct HealthFactor {
-    pub ratio: u32,
+    pub ratio: u32, // bps, e.g., 10000 = 100%
     pub is_healthy: bool,
 }
 

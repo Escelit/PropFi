@@ -863,6 +863,9 @@ dependencies = [
 name = "propfi-fraction-vault"
 version = "0.1.0"
 dependencies = [
+ "propfi-compliance-registry",
+ "propfi-oracle-adapter",
+ "propfi-property-registry",
  "propfi-types",
  "soroban-sdk",
 ]
@@ -879,6 +882,8 @@ dependencies = [
 name = "propfi-mortgage-pool"
 version = "0.1.0"
 dependencies = [
+ "propfi-oracle-adapter",
+ "propfi-property-registry",
  "propfi-types",
  "soroban-sdk",
 ]
@@ -903,6 +908,8 @@ dependencies = [
 name = "propfi-property-registry"
 version = "0.1.0"
 dependencies = [
+ "propfi-compliance-registry",
+ "propfi-oracle-adapter",
  "propfi-types",
  "soroban-sdk",
 ]
@@ -911,6 +918,9 @@ dependencies = [
 name = "propfi-rent-distributor"
 version = "0.1.0"
 dependencies = [
+ "propfi-compliance-registry",
+ "propfi-fraction-vault",
+ "propfi-property-registry",
  "propfi-types",
  "soroban-sdk",
 ]

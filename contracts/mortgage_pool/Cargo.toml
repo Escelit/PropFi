@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
 soroban-sdk = "21"
 propfi-types = { path = "../types" }
+propfi-property-registry = { path = "../property_registry" }
+propfi-oracle-adapter = { path = "../oracle_adapter" }
 
+[dev-dependencies]
+soroban-sdk = { version = "21", features = ["testutils"] }
