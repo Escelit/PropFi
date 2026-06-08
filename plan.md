@@ -12,88 +12,88 @@ Target: **60% complete** — a robust foundation for contributors.
 
 ### Day 1 — Workspace & Shared Foundation
 
-- [ ] `Cargo.toml` workspace manifest (root)
-- [ ] All 8 contract directories with `Cargo.toml` + `src/lib.rs` stubs
-- [ ] Shared types crate: `PropertyData`, `PropertyStatus`, `HealthFactor`, `PriceData`, `JurisdictionRules`, `GovernanceAction`, `PathQuote`
-- [ ] `soroban-sdk` dependency aligned across all contracts
-- [ ] `rust-toolchain.toml` (stable 1.75+)
-- [ ] `wasm32-unknown-unknown` target configured
-- [ ] Empty `cargo build` passing
+- [x] `Cargo.toml` workspace manifest (root)
+- [x] All 8 contract directories with `Cargo.toml` + `src/lib.rs` stubs
+- [x] Shared types crate: `PropertyData`, `PropertyStatus`, `HealthFactor`, `PriceData`, `JurisdictionRules`, `GovernanceAction`, `PathQuote`
+- [x] `soroban-sdk` dependency aligned across all contracts
+- [x] `rust-toolchain.toml` (stable 1.75+)
+- [x] `wasm32-unknown-unknown` target configured
+- [x] Empty `cargo build` passing
 
 ### Day 2 — ComplianceRegistry (full implementation)
 
-- [ ] Data model: `Attestation` map (user → proof_hash, jurisdiction, expiry, active)
-- [ ] Functions: `attest`, `is_compliant`, `revoke`, `set_jurisdiction_rules`, `attestation_expiry`
-- [ ] Events: `Attested`, `Revoked`, `RulesUpdated`
-- [ ] Unit tests: attest flow, expiry, revocation, jurisdiction filtering, admin gating
-- [ ] **Deliverable:** 1st contract done, tested, building
+- [x] Data model: `Attestation` map (user → proof_hash, jurisdiction, expiry, active)
+- [x] Functions: `attest`, `is_compliant`, `revoke`, `set_jurisdiction_rules`, `attestation_expiry`
+- [x] Events: `Attested`, `Revoked`, `RulesUpdated`
+- [x] Unit tests: attest flow, expiry, revocation, jurisdiction filtering, admin gating
+- [x] **Deliverable:** 1st contract done, tested, building
 
 ### Day 3 — OracleAdapter (full implementation)
 
-- [ ] Data model: `PriceData` per asset, oracle registry with weights, TWAP accumulator
-- [ ] Functions: `submit_price`, `get_price`, `add_oracle`, `twap`
-- [ ] Events: `PriceUpdated`, `OracleAdded`, `StaleAlert`
-- [ ] Staleness detection (configurable threshold)
-- [ ] Unit tests: price submission, weighted aggregation, TWAP over window, staleness
-- [ ] **Deliverable:** 2nd contract done
+- [x] Data model: `PriceData` per asset, oracle registry with weights, TWAP accumulator
+- [x] Functions: `submit_price`, `get_price`, `add_oracle`, `twap`
+- [x] Events: `PriceUpdated`, `OracleAdded`, `StaleAlert`
+- [x] Staleness detection (configurable threshold)
+- [x] Unit tests: price submission, weighted aggregation, TWAP over window, staleness
+- [x] **Deliverable:** 2nd contract done
 
 ### Day 4 — PropertyRegistry (full implementation)
 
-- [ ] Data model: property map (ID → owner, valuation, doc_hash, status, timestamps)
-- [ ] Functions: `register_property`, `update_valuation`, `transfer_ownership`, `get_property`, `set_status`
-- [ ] Cross-contract: `OracleAdapter.get_price` for valuation verification
-- [ ] Cross-contract: `ComplianceRegistry.is_compliant` for ownership transfer
-- [ ] Events: `PropertyRegistered`, `ValuationUpdated`, `OwnershipTransferred`
-- [ ] Unit tests: full lifecycle — register, update valuation, transfer, status changes, error cases
-- [ ] **Deliverable:** 3rd contract done
+- [x] Data model: property map (ID → owner, valuation, doc_hash, status, timestamps)
+- [x] Functions: `register_property`, `update_valuation`, `transfer_ownership`, `get_property`, `set_status`
+- [x] Cross-contract: `OracleAdapter.get_price` for valuation verification
+- [x] Cross-contract: `ComplianceRegistry.is_compliant` for ownership transfer
+- [x] Events: `PropertyRegistered`, `ValuationUpdated`, `OwnershipTransferred`
+- [x] Unit tests: full lifecycle — register, update valuation, transfer, status changes, error cases
+- [x] **Deliverable:** 3rd contract done
 
 ### Day 5 — FractionVault (full implementation)
 
-- [ ] Data model: fraction supply per property, balances map (user × property → amount), holder tracking
-- [ ] Functions: `fractionalize`, `buy_fraction`, `sell_fraction`, `get_balance`, `total_holders`
-- [ ] Cross-contract: `PropertyRegistry.get_property` (validate property exists)
-- [ ] Cross-contract: `ComplianceRegistry.is_compliant` (gate buys)
-- [ ] Stellar token transfer for buy/sell settlement
-- [ ] Events: `Fractionalized`, `FractionPurchased`, `FractionSold`
-- [ ] Unit tests: fractionalization, buy, sell with min_price, holder tracking, insufficient balance, compliance gating
-- [ ] **Deliverable:** 4th contract done
+- [x] Data model: fraction supply per property, balances map (user × property → amount), holder tracking
+- [x] Functions: `fractionalize`, `buy_fraction`, `sell_fraction`, `get_balance`, `total_holders`
+- [x] Cross-contract: `PropertyRegistry.get_property` (validate property exists)
+- [x] Cross-contract: `ComplianceRegistry.is_compliant` (gate buys)
+- [x] Stellar token transfer for buy/sell settlement
+- [x] Events: `Fractionalized`, `FractionPurchased`, `FractionSold`
+- [x] Unit tests: fractionalization, buy, sell with min_price, holder tracking, insufficient balance, compliance gating
+- [x] **Deliverable:** 4th contract done
 
 ### Day 6 — RentDistributor + MortgagePool (full implementation)
 
 **RentDistributor:**
 
-- [ ] Deposit tracking per property, pro-rata distribution algorithm
-- [ ] Functions: `deposit_rent`, `distribute`, `claim`, `set_schedule`, `pending_yield`
-- [ ] Cross-contract: `FractionVault.get_balance` + `FractionVault.total_holders` for pro-rata
-- [ ] Events: `RentDeposited`, `YieldDistributed`, `YieldClaimed`
-- [ ] Unit tests: single deposit + distribute, multiple deposits, partial claims
+- [x] Deposit tracking per property, pro-rata distribution algorithm
+- [x] Functions: `deposit_rent`, `distribute`, `claim`, `set_schedule`, `pending_yield`
+- [x] Cross-contract: `FractionVault.get_balance` + `FractionVault.total_holders` for pro-rata
+- [x] Events: `RentDeposited`, `YieldDistributed`, `YieldClaimed`
+- [x] Unit tests: single deposit + distribute, multiple deposits, partial claims
 
 **MortgagePool:**
 
-- [ ] Loan data model, liquidity pool, LTV gating (max 70%), liquidation (80% threshold), interest accrual
-- [ ] Functions: `open_loan`, `repay`, `liquidate`, `deposit_liquidity`, `withdraw_liquidity`, `loan_health`
-- [ ] Cross-contract: `OracleAdapter.get_price` for LTV, `PropertyRegistry.get_property` for valuation
-- [ ] Events: `LoanOpened`, `Repaid`, `Liquidated`, `LiquidityDeposited`
-- [ ] Unit tests: open loan, repay, liquidation trigger, LTV enforcement, health factor
-- [ ] **Deliverable:** 2 more contracts done (6 total)
+- [x] Loan data model, liquidity pool, LTV gating (max 70%), liquidation (80% threshold), interest accrual
+- [x] Functions: `open_loan`, `repay`, `liquidate`, `deposit_liquidity`, `withdraw_liquidity`, `loan_health`
+- [x] Cross-contract: `OracleAdapter.get_price` for LTV, `PropertyRegistry.get_property` for valuation
+- [x] Events: `LoanOpened`, `Repaid`, `Liquidated`, `LiquidityDeposited`
+- [x] Unit tests: open loan, repay, liquidation trigger, LTV enforcement, health factor
+- [x] **Deliverable:** 2 more contracts done (6 total)
 
 ### Day 7 — PaymentBridge + Governance (full implementation)
 
 **PaymentBridge:**
 
-- [ ] Asset abstraction (XLM/USDC/etc.), send, batch_send, anchor registration, path estimation
-- [ ] Functions: `send`, `batch_send`, `register_anchor`, `estimate_path`
-- [ ] Events: `PaymentSent`, `BatchDispatched`, `AnchorRegistered`
-- [ ] Unit tests: single send, batch dispatch, anchor whitelist, insufficient balance
+- [x] Asset abstraction (XLM/USDC/etc.), send, batch_send, anchor registration, path estimation
+- [x] Functions: `send`, `batch_send`, `register_anchor`, `estimate_path`
+- [x] Events: `PaymentSent`, `BatchDispatched`, `AnchorRegistered`
+- [x] Unit tests: single send, batch dispatch, anchor whitelist, insufficient balance
 
 **Governance:**
 
-- [ ] Proposal lifecycle: Proposed → Voting (48h) → Queued (24h timelock) → Executed
-- [ ] Functions: `propose`, `vote`, `execute`, `voting_power`
-- [ ] Cross-contract: `FractionVault.get_balance` for voting power
-- [ ] Events: `ProposalCreated`, `Voted`, `ProposalExecuted`
-- [ ] Unit tests: propose, vote (for/against), quorum met/failed, timelock enforcement, execution
-- [ ] **Deliverable:** All 8 contracts implemented and unit-tested
+- [x] Proposal lifecycle: Proposed → Voting (48h) → Queued (24h timelock) → Executed
+- [x] Functions: `propose`, `vote`, `execute`, `voting_power`
+- [x] Cross-contract: `FractionVault.get_balance` for voting power
+- [x] Events: `ProposalCreated`, `Voted`, `ProposalExecuted`
+- [x] Unit tests: propose, vote (for/against), quorum met/failed, timelock enforcement, execution
+- [x] **Deliverable:** All 8 contracts implemented and unit-tested
 
 ---
 
