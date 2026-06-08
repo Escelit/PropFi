@@ -874,6 +874,9 @@ dependencies = [
 name = "propfi-governance"
 version = "0.1.0"
 dependencies = [
+ "propfi-compliance-registry",
+ "propfi-fraction-vault",
+ "propfi-property-registry",
  "propfi-types",
  "soroban-sdk",
 ]

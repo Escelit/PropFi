@@ -76,6 +76,7 @@ pub enum GovernanceAction {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[contracttype]
 pub struct PathQuote {
     pub dest_amount: i128,
     pub path: Vec<Address>,
