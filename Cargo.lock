@@ -882,6 +882,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "propfi-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "propfi-compliance-registry",
+ "propfi-fraction-vault",
+ "propfi-governance",
+ "propfi-mortgage-pool",
+ "propfi-oracle-adapter",
+ "propfi-payment-bridge",
+ "propfi-property-registry",
+ "propfi-rent-distributor",
+ "propfi-types",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "propfi-mortgage-pool"
 version = "0.1.0"
 dependencies = [

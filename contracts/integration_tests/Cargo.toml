@@ -1,0 +1,17 @@
+[package]
+name = "propfi-integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+soroban-sdk = { version = "21", features = ["testutils"] }
+propfi-types = { path = "../types" }
+propfi-compliance-registry = { path = "../compliance_registry" }
+propfi-oracle-adapter = { path = "../oracle_adapter" }
+propfi-property-registry = { path = "../property_registry" }
+propfi-fraction-vault = { path = "../fraction_vault" }
+propfi-rent-distributor = { path = "../rent_distributor" }
+propfi-mortgage-pool = { path = "../mortgage_pool" }
+propfi-payment-bridge = { path = "../payment_bridge" }
+propfi-governance = { path = "../governance" }
