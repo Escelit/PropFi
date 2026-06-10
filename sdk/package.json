@@ -1,0 +1,22 @@
+{
+  "name": "@propfi/sdk",
+  "version": "0.1.0",
+  "description": "PropFi TypeScript SDK — type-safe Soroban contract clients",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  },
+  "license": "MIT"
+}
