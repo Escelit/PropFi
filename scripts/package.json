@@ -1,0 +1,16 @@
+{
+  "name": "@propfi/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "seed": "npx ts-node seed_data.ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.1.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.0",
+    "typescript": "^5.5.0"
+  }
+}
