@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id        BigInt   @id
+  owner     String
+  valuation BigInt
+  docHash   String   @map("doc_hash")
+  status    String
+  createdAt BigInt   @map("created_at")
+  updatedAt BigInt   @map("updated_at")
+
+  fractionBalances FractionBalance[]
+  rentDistributions RentDistribution[]
+  loans            Loan[]
+
+  @@map("property")
+}
+
+model FractionBalance {
+  id         BigInt @id @default(autoincrement())
+  propertyId BigInt @map("property_id")
+  user       String
+  amount     BigInt
+  updatedAt  BigInt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([propertyId, user])
+  @@map("fraction_balance")
+}
+
+model RentDistribution {
+  id         BigInt  @id @default(autoincrement())
+  propertyId BigInt  @map("property_id")
+  eventType  String  @map("event_type")
+  user       String?
+  amount     BigInt
+  token      String?
+  timestamp  BigInt
+  ledgerSeq  Int     @map("ledger_seq")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@map("rent_distribution")
+}
+
+model Loan {
+  id                  BigInt @id
+  borrower            String
+  propId              BigInt @map("prop_id")
+  amount              BigInt
+  collateralValuation BigInt @map("collateral_valuation")
+  ltvBps              Int    @map("ltv_bps")
+  interestRateBps     Int    @map("interest_rate_bps")
+  status              String
+  createdAt           BigInt @map("created_at")
+  lastRepaymentAt     BigInt @map("last_repayment_at")
+
+  property Property @relation(fields: [propId], references: [id])
+
+  @@map("loan")
+}
+
+model Attestation {
+  user         String  @id
+  proofHash    String  @map("proof_hash")
+  jurisdiction String
+  expiry       BigInt
+  active       Boolean
+
+  @@map("attestation")
+}
+
+model Proposal {
+  id           BigInt  @id
+  proposer     String
+  actionType   Int     @map("action_type")
+  calldata     String
+  description  String
+  createdAt    BigInt  @map("created_at")
+  votingEnd    BigInt  @map("voting_end")
+  executed     Boolean
+  forVotes     BigInt  @map("for_votes")
+  againstVotes BigInt  @map("against_votes")
+  quorum       BigInt
+
+  @@map("proposal")
+}
+
+model IndexerState {
+  id             String   @id
+  lastLedger     Int      @map("last_ledger")
+  lastProcessedAt DateTime @map("last_processed_at") @default(now())
+
+  @@map("indexer_state")
+}
