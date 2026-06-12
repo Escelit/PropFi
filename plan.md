@@ -138,13 +138,13 @@ Target: **60% complete** — a robust foundation for contributors.
 
 ### Day 11 — Indexer (basic event ingestion)
 
-- [ ] `indexer/` with Node.js/TypeScript + Prisma
-- [ ] Prisma schema: `Property`, `FractionBalance`, `RentDistribution`, `Loan`, `Attestation`, `Proposal`
-- [ ] Horizon event stream listener
-- [ ] Handlers for key events (PropertyRegistered, Fractionalized, etc.)
-- [ ] PostgreSQL migrations
-- [ ] `npm run dev` starts the indexer
-- [ ] **Deliverable:** Indexer ingesting events into PostgreSQL
+- [x] `indexer/` with Node.js/TypeScript + Prisma
+- [x] Prisma schema: `Property`, `FractionBalance`, `RentDistribution`, `Loan`, `Attestation`, `Proposal`
+- [x] Soroban RPC event stream listener (polling)
+- [x] Handlers for all 26 key contract events across 8 contracts
+- [x] PostgreSQL migrations (via Prisma schema)
+- [x] `npm run dev` starts the indexer
+- [x] **Deliverable:** Indexer ingesting events into PostgreSQL
 
 ### Day 12 — CI/CD & Code Quality
 
@@ -196,8 +196,8 @@ Target: **60% complete** — a robust foundation for contributors.
 | Integration tests (major flows) | 80% |
 | TypeScript SDK (core clients) | 60% |
 | Deployment scripts (testnet ready) | 100% |
-| Indexer (basic event ingestion) | 50% |
+| Indexer (basic event ingestion) | 100% |
 | Frontend (scaffold + 3 pages) | 30% |
 | CI/CD pipelines | 100% |
 | Documentation (README, rustdoc) | 50% |
-| **Overall** | **~60%** |
+| **Overall** | **~80%** |
