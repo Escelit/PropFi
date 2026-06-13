@@ -1,9 +1,36 @@
+# Rust
 /target
 **/*.rs.bk
-.env
-deployed.json
-node_modules
-.next
-dist
 *.wasm
+Cargo.lock
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Deployment
+deployed.json
+
+# Testing
 test_snapshots/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*

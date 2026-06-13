@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deploy-testnet:
+    if: github.ref_name == 'main'
+    name: Deploy to Testnet
+    runs-on: ubuntu-latest
+    environment: testnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install soroban-cli
+        run: |
+          cargo install soroban-cli --locked
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          ADMIN_KEY_NAME=${{ secrets.ADMIN_KEY_NAME }}
+          ADMIN_PUBLIC_KEY=${{ secrets.ADMIN_PUBLIC_KEY }}
+          STALENESS_THRESHOLD=${{ vars.STALENESS_THRESHOLD || '3600' }}
+          EOF
+      - name: Deploy contracts
+        run: |
+          ./scripts/deploy.sh --network testnet
+
+  deploy-mainnet:
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: Deploy to Mainnet
+    runs-on: ubuntu-latest
+    environment: mainnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install soroban-cli
+        run: |
+          cargo install soroban-cli --locked
+      - name: Create .env
+        run: |
+          cat > .env <<EOF
+          ADMIN_KEY_NAME=${{ secrets.ADMIN_KEY_NAME }}
+          ADMIN_PUBLIC_KEY=${{ secrets.ADMIN_PUBLIC_KEY }}
+          STALENESS_THRESHOLD=${{ vars.STALENESS_THRESHOLD || '3600' }}
+          USDC_CONTRACT_ID=${{ secrets.USDC_CONTRACT_ID }}
+          XLM_CONTRACT_ID=${{ secrets.XLM_CONTRACT_ID }}
+          ORACLE_PUBLIC_KEYS=${{ secrets.ORACLE_PUBLIC_KEYS }}
+          ORACLE_WEIGHTS=${{ vars.ORACLE_WEIGHTS || '' }}
+          EOF
+      - name: Deploy contracts
+        run: |
+          ./scripts/deploy.sh --network mainnet --confirm
