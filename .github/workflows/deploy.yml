@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: testnet
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: mainnet
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
