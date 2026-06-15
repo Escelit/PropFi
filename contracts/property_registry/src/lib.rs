@@ -1,6 +1,9 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, Address, BytesN, Env, Symbol, Vec};
+//! Tokenizes real-world properties as on-chain assets with oracle-fed valuations and compliance-gated transfers.
 use propfi_types::{PriceData, PropertyData, PropertyStatus};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Symbol, Vec,
+};
 
 const MAX_VALUATION_DEVIATION_BPS: i128 = 2000;
 
@@ -30,6 +33,7 @@ pub struct PropertyRegistry;
 
 #[contractimpl]
 impl PropertyRegistry {
+    /// Sets the admin address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -38,6 +42,7 @@ impl PropertyRegistry {
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 
+    /// Registers a new property with owner, valuation, doc hash, and jurisdiction. Admin-only. Returns the new property ID.
     pub fn register_property(
         env: Env,
         owner: Address,
@@ -87,6 +92,7 @@ impl PropertyRegistry {
         counter
     }
 
+    /// Updates a property's valuation using an oracle price feed. Only callable by the property owner.
     pub fn update_valuation(
         env: Env,
         prop_id: u64,
@@ -133,12 +139,11 @@ impl PropertyRegistry {
             .instance()
             .set(&DataKey::Property(prop_id), &property);
 
-        env.events().publish(
-            (Symbol::new(&env, "ValuationUpdated"), prop_id),
-            new_val,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "ValuationUpdated"), prop_id), new_val);
     }
 
+    /// Transfers property ownership to a new address. Checks compliance via the provided ComplianceRegistry contract.
     pub fn transfer_ownership(env: Env, prop_id: u64, to: Address, compliance_contract: Address) {
         let mut property: PropertyData = env
             .storage()
@@ -177,6 +182,7 @@ impl PropertyRegistry {
         );
     }
 
+    /// Returns the PropertyData for the given property ID.
     pub fn get_property(env: Env, prop_id: u64) -> PropertyData {
         env.storage()
             .instance()
@@ -184,6 +190,7 @@ impl PropertyRegistry {
             .unwrap_or_else(|| panic!("property not found"))
     }
 
+    /// Updates the property status (Active, Inactive, UnderMaintenance). Admin-only.
     pub fn set_status(env: Env, prop_id: u64, status: PropertyStatus) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -201,6 +208,7 @@ impl PropertyRegistry {
             .set(&DataKey::Property(prop_id), &property);
     }
 
+    /// Returns the jurisdiction symbol for a property.
     pub fn get_property_jurisdiction(env: Env, prop_id: u64) -> Symbol {
         env.storage()
             .instance()
@@ -257,8 +265,7 @@ mod test {
         price: i128,
     ) -> Address {
         let contract_id = env.register_contract(None, OracleAdapter);
-        let oracle_client =
-            propfi_oracle_adapter::OracleAdapterClient::new(env, &contract_id);
+        let oracle_client = propfi_oracle_adapter::OracleAdapterClient::new(env, &contract_id);
         oracle_client.initialize(admin, &86400u64);
         oracle_client.add_oracle(oracle, &100u32);
         oracle_client.submit_price(oracle, asset, &price);
@@ -352,7 +359,8 @@ mod test {
     fn test_set_status() {
         let (env, _admin, client) = setup_property_registry();
         let owner = Address::generate(&env);
-        let prop_id = register_test_property(&client, &env, &owner, 100_000, &Symbol::new(&env, "US"));
+        let prop_id =
+            register_test_property(&client, &env, &owner, 100_000, &Symbol::new(&env, "US"));
 
         client.set_status(&prop_id, &PropertyStatus::UnderMaintenance);
         assert_eq!(
@@ -361,7 +369,10 @@ mod test {
         );
 
         client.set_status(&prop_id, &PropertyStatus::Inactive);
-        assert_eq!(client.get_property(&prop_id).status, PropertyStatus::Inactive);
+        assert_eq!(
+            client.get_property(&prop_id).status,
+            PropertyStatus::Inactive
+        );
 
         client.set_status(&prop_id, &PropertyStatus::Active);
         assert_eq!(client.get_property(&prop_id).status, PropertyStatus::Active);
@@ -396,8 +407,7 @@ mod test {
         let client = PropertyRegistryClient::new(&env, &prop_reg_id);
         client.initialize(&admin);
 
-        let prop_id =
-            register_test_property(&client, &env, &owner, 100_000, &jurisdiction);
+        let prop_id = register_test_property(&client, &env, &owner, 100_000, &jurisdiction);
 
         client.transfer_ownership(&prop_id, &recipient, &compliance_id);
 
@@ -424,8 +434,7 @@ mod test {
         let client = PropertyRegistryClient::new(&env, &prop_reg_id);
         client.initialize(&admin);
 
-        let prop_id =
-            register_test_property(&client, &env, &owner, 100_000, &jurisdiction);
+        let prop_id = register_test_property(&client, &env, &owner, 100_000, &jurisdiction);
 
         client.transfer_ownership(&prop_id, &recipient, &compliance_id);
     }
@@ -452,7 +461,8 @@ mod test {
         let client = PropertyRegistryClient::new(&env, &prop_reg_id);
         client.initialize(&admin);
 
-        let prop_id = register_test_property(&client, &env, &owner, 100_000, &Symbol::new(&env, "US"));
+        let prop_id =
+            register_test_property(&client, &env, &owner, 100_000, &Symbol::new(&env, "US"));
 
         client.transfer_ownership(&prop_id, &recipient, &compliance_id);
     }
@@ -646,8 +656,7 @@ mod test {
         client.initialize(&admin);
 
         // Register
-        let prop_id =
-            register_test_property(&client, &env, &owner, 90_000, &jurisdiction);
+        let prop_id = register_test_property(&client, &env, &owner, 90_000, &jurisdiction);
         assert_eq!(client.get_property(&prop_id).owner, owner);
 
         // Update valuation (90k -> 105k, within 20% of oracle 100k)

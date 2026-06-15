@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec};
+//! Manages fractional ownership of tokenized properties. Supports minting fractions, buying/selling on secondary market, and holder tracking.
 use propfi_types::PropertyData;
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 #[contracttype]
@@ -27,6 +28,7 @@ pub struct FractionVault;
 
 #[contractimpl]
 impl FractionVault {
+    /// Sets the admin address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -35,6 +37,7 @@ impl FractionVault {
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 
+    /// Mints `total_supply` fractions for a property at the given price. Admin-only. Cross-calls PropertyRegistry to validate the property.
     pub fn fractionalize(
         env: Env,
         prop_id: u64,
@@ -90,6 +93,7 @@ impl FractionVault {
         );
     }
 
+    /// Returns the fraction balance of an investor for a given property.
     pub fn get_balance(env: Env, investor: Address, prop_id: u64) -> u128 {
         env.storage()
             .instance()
@@ -97,6 +101,7 @@ impl FractionVault {
             .unwrap_or(0)
     }
 
+    /// Returns the total number of unique holders for a property.
     pub fn total_holders(env: Env, prop_id: u64) -> u32 {
         env.storage()
             .instance()
@@ -104,6 +109,7 @@ impl FractionVault {
             .unwrap_or(0)
     }
 
+    /// Returns the FractionInfo struct for a property.
     pub fn get_fraction_info(env: Env, prop_id: u64) -> (u128, i128, Address, Address, Address) {
         let info: FractionInfo = env
             .storage()
@@ -119,27 +125,38 @@ impl FractionVault {
         )
     }
 
+    /// Sets the RentDistributor contract address for yield checkpointing. Admin-only.
     pub fn set_rent_distributor(env: Env, distributor: Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
-        env.storage().instance().set(&Symbol::new(&env, "rent_distributor"), &distributor);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "rent_distributor"), &distributor);
     }
 
     fn checkpoint_yield(env: &Env, investor: &Address, prop_id: u64, balance: u128) {
-        if let Some(distributor) = env.storage().instance().get::<Symbol, Address>(&Symbol::new(env, "rent_distributor")) {
+        if let Some(distributor) = env
+            .storage()
+            .instance()
+            .get::<Symbol, Address>(&Symbol::new(env, "rent_distributor"))
+        {
             env.invoke_contract::<()>(
                 &distributor,
                 &Symbol::new(env, "checkpoint"),
-                Vec::from_array(env, [
-                    env.current_contract_address().to_val(),
-                    investor.to_val(),
-                    prop_id.into_val(env),
-                    balance.into_val(env),
-                ]),
+                Vec::from_array(
+                    env,
+                    [
+                        env.current_contract_address().to_val(),
+                        investor.to_val(),
+                        prop_id.into_val(env),
+                        balance.into_val(env),
+                    ],
+                ),
             );
         }
     }
 
+    /// Purchases `amount` fractions of a property. Checks compliance and transfers tokens.
     pub fn buy_fraction(env: Env, buyer: Address, prop_id: u64, amount: u128) {
         buyer.require_auth();
 
@@ -192,9 +209,7 @@ impl FractionVault {
                 env.storage().instance().set(&holder_key, &true);
                 let count_key = DataKey::HolderCount(prop_id);
                 let count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
-                env.storage()
-                    .instance()
-                    .set(&count_key, &(count + 1));
+                env.storage().instance().set(&count_key, &(count + 1));
             }
         }
 
@@ -203,7 +218,10 @@ impl FractionVault {
         env.invoke_contract::<()>(
             &info.payment_token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [buyer.to_val(), vault.to_val(), payment.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [buyer.to_val(), vault.to_val(), payment.into_val(&env)],
+            ),
         );
 
         env.events().publish(
@@ -212,13 +230,8 @@ impl FractionVault {
         );
     }
 
-    pub fn sell_fraction(
-        env: Env,
-        seller: Address,
-        prop_id: u64,
-        amount: u128,
-        min_price: i128,
-    ) {
+    /// Sells `amount` fractions with a minimum price floor. Cross-calls RentDistributor checkpoint.
+    pub fn sell_fraction(env: Env, seller: Address, prop_id: u64, amount: u128, min_price: i128) {
         seller.require_auth();
 
         if amount == 0 {
@@ -255,9 +268,7 @@ impl FractionVault {
             let count_key = DataKey::HolderCount(prop_id);
             let count: u32 = env.storage().instance().get(&count_key).unwrap_or(0);
             if count > 0 {
-                env.storage()
-                    .instance()
-                    .set(&count_key, &(count - 1));
+                env.storage().instance().set(&count_key, &(count - 1));
             }
         }
 
@@ -265,7 +276,10 @@ impl FractionVault {
         env.invoke_contract::<()>(
             &info.payment_token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [vault.to_val(), seller.to_val(), payout.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [vault.to_val(), seller.to_val(), payout.into_val(&env)],
+            ),
         );
 
         env.events().publish(
@@ -293,11 +307,7 @@ mod test {
         (env, admin, owner)
     }
 
-    fn register_property(
-        env: &Env,
-        admin: &Address,
-        owner: &Address,
-    ) -> (u64, Address, Address) {
+    fn register_property(env: &Env, admin: &Address, owner: &Address) -> (u64, Address, Address) {
         let jurisdiction = symbol_short!("US");
 
         let compliance_id = env.register_contract(None, ComplianceRegistry);
@@ -309,7 +319,8 @@ mod test {
         prop_reg_client.initialize(admin);
 
         let doc_hash = BytesN::from_array(env, &[0u8; 32]);
-        let prop_id = prop_reg_client.register_property(owner, &100_000i128, &doc_hash, &jurisdiction);
+        let prop_id =
+            prop_reg_client.register_property(owner, &100_000i128, &doc_hash, &jurisdiction);
 
         (prop_id, prop_reg_id, compliance_id)
     }
@@ -347,7 +358,14 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         assert_eq!(vault.total_holders(&prop_id), 0);
         assert_eq!(vault.get_balance(&owner, &prop_id), 0);
@@ -361,7 +379,14 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&99, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &99,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
     }
 
     #[test]
@@ -372,8 +397,22 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
-        vault.fractionalize(&prop_id, &500u128, &50i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
+        vault.fractionalize(
+            &prop_id,
+            &500u128,
+            &50i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
     }
 
     #[test]
@@ -384,7 +423,14 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&prop_id, &0u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &0u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
     }
 
     #[test]
@@ -395,7 +441,14 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&prop_id, &1000u128, &0i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &0i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
     }
 
     #[test]
@@ -415,13 +468,21 @@ mod test {
         let vault = setup_vault(&env, &admin);
 
         let token = Address::generate(&env);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         assert_eq!(vault.total_holders(&prop_id), 0);
     }
 
     fn setup_token(env: &Env, admin: &Address) -> Address {
-        env.register_stellar_asset_contract_v2(admin.clone()).address()
+        env.register_stellar_asset_contract_v2(admin.clone())
+            .address()
     }
 
     fn attest_buyer(env: &Env, compliance_id: &Address, buyer: &Address) {
@@ -444,7 +505,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer = Address::generate(&env);
         sac.mint(&buyer, &100_000i128);
@@ -472,7 +540,14 @@ mod test {
         let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
         let vault = setup_vault(&env, &admin);
         let token = setup_token(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer = Address::generate(&env);
         vault.buy_fraction(&buyer, &prop_id, &0u128);
@@ -485,7 +560,14 @@ mod test {
         let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
         let vault = setup_vault(&env, &admin);
         let token = setup_token(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer = Address::generate(&env);
         vault.buy_fraction(&buyer, &prop_id, &10u128);
@@ -504,7 +586,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let seller = Address::generate(&env);
         sac.mint(&seller, &100_000i128);
@@ -531,7 +620,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let seller = Address::generate(&env);
         sac.mint(&seller, &100_000i128);
@@ -552,7 +648,14 @@ mod test {
         let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
         let vault = setup_vault(&env, &admin);
         let token = setup_token(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let seller = Address::generate(&env);
         vault.sell_fraction(&seller, &prop_id, &1u128, &0i128);
@@ -574,7 +677,14 @@ mod test {
         let (prop_id, prop_reg_id, compliance_id) = register_property(&env, &admin, &owner);
         let vault = setup_vault(&env, &admin);
         let token = setup_token(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let seller = Address::generate(&env);
         vault.sell_fraction(&seller, &prop_id, &0u128, &0i128);
@@ -593,7 +703,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let seller = Address::generate(&env);
         sac.mint(&seller, &100_000i128);
@@ -617,7 +734,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let user = Address::generate(&env);
         sac.mint(&user, &1_000_000i128);
@@ -650,7 +774,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer1 = Address::generate(&env);
         let buyer2 = Address::generate(&env);
@@ -683,7 +814,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer = Address::generate(&env);
         attest_buyer(&env, &compliance_id, &buyer);
@@ -702,7 +840,14 @@ mod test {
         assert_eq!(prop_id_reg, prop_id);
 
         let vault = setup_vault(&env, &admin);
-        vault.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let buyer = Address::generate(&env);
         sac.mint(&buyer, &1_000_000i128);

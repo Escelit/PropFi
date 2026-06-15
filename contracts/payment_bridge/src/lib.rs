@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec};
+//! Cross-border payment and remittance layer. Supports single and batch sends with anchor registration for fiat on/off ramps.
 use propfi_types::PathQuote;
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec};
 
 const FEE_BPS: i128 = 10;
 
@@ -17,6 +18,7 @@ pub struct PaymentBridge;
 
 #[contractimpl]
 impl PaymentBridge {
+    /// Sets the admin address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -25,6 +27,7 @@ impl PaymentBridge {
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 
+    /// Deposits tokens into the bridge for a given asset.
     pub fn deposit(env: Env, user: Address, asset: Symbol, amount: i128) {
         user.require_auth();
         if amount <= 0 {
@@ -41,7 +44,10 @@ impl PaymentBridge {
         env.invoke_contract::<()>(
             &token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [user.to_val(), bridge.to_val(), amount.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [user.to_val(), bridge.to_val(), amount.into_val(&env)],
+            ),
         );
 
         let key = DataKey::Balance(user.clone(), asset.clone());
@@ -49,6 +55,7 @@ impl PaymentBridge {
         env.storage().instance().set(&key, &(balance + amount));
     }
 
+    /// Withdraws tokens from the bridge for a given asset.
     pub fn withdraw(env: Env, user: Address, asset: Symbol, amount: i128) {
         user.require_auth();
         if amount <= 0 {
@@ -73,10 +80,14 @@ impl PaymentBridge {
         env.invoke_contract::<()>(
             &token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [bridge.to_val(), user.to_val(), amount.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [bridge.to_val(), user.to_val(), amount.into_val(&env)],
+            ),
         );
     }
 
+    /// Sends `amount` from one asset to another via path payment.
     pub fn send(env: Env, from: Address, to: Address, amount: i128, src: Symbol, dst: Symbol) {
         from.require_auth();
         if amount <= 0 {
@@ -88,7 +99,9 @@ impl PaymentBridge {
         if src_balance < amount {
             panic!("insufficient balance");
         }
-        env.storage().instance().set(&src_key, &(src_balance - amount));
+        env.storage()
+            .instance()
+            .set(&src_key, &(src_balance - amount));
 
         let dest_amount = if src == dst {
             amount
@@ -98,7 +111,9 @@ impl PaymentBridge {
 
         let dst_key = DataKey::Balance(to.clone(), dst.clone());
         let dst_balance: i128 = env.storage().instance().get(&dst_key).unwrap_or(0);
-        env.storage().instance().set(&dst_key, &(dst_balance + dest_amount));
+        env.storage()
+            .instance()
+            .set(&dst_key, &(dst_balance + dest_amount));
 
         env.events().publish(
             (Symbol::new(&env, "PaymentSent"), from),
@@ -106,6 +121,7 @@ impl PaymentBridge {
         );
     }
 
+    /// Sends payments to multiple recipients in batch.
     pub fn batch_send(
         env: Env,
         from: Address,
@@ -129,7 +145,9 @@ impl PaymentBridge {
         if src_balance < total {
             panic!("insufficient balance");
         }
-        env.storage().instance().set(&src_key, &(src_balance - total));
+        env.storage()
+            .instance()
+            .set(&src_key, &(src_balance - total));
 
         for i in 0..recipients.len() {
             let (to, amt) = recipients.get(i).unwrap();
@@ -153,6 +171,7 @@ impl PaymentBridge {
         );
     }
 
+    /// Registers an anchor for an asset symbol. Admin-only.
     pub fn register_anchor(env: Env, asset: Symbol, token_address: Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -161,10 +180,13 @@ impl PaymentBridge {
             .instance()
             .set(&DataKey::AnchorAsset(asset.clone()), &token_address);
 
-        env.events()
-            .publish((Symbol::new(&env, "AnchorRegistered"), asset), token_address);
+        env.events().publish(
+            (Symbol::new(&env, "AnchorRegistered"), asset),
+            token_address,
+        );
     }
 
+    /// Returns a PathQuote estimating the destination amount, path, and fee for a conversion.
     pub fn estimate_path(env: Env, src: Symbol, dst: Symbol, amount: i128) -> PathQuote {
         if amount <= 0 {
             panic!("amount must be positive");
@@ -194,7 +216,11 @@ impl PaymentBridge {
             path.push_back(addr);
         }
 
-        let estimated_fee = if same { 0i128 } else { amount * FEE_BPS / 10000 };
+        let estimated_fee = if same {
+            0i128
+        } else {
+            amount * FEE_BPS / 10000
+        };
 
         PathQuote {
             dest_amount,
@@ -203,6 +229,7 @@ impl PaymentBridge {
         }
     }
 
+    /// Returns the bridge balance of a user for a given asset.
     pub fn get_balance(env: Env, user: Address, asset: Symbol) -> i128 {
         env.storage()
             .instance()
@@ -217,7 +244,16 @@ mod test {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{symbol_short, Env};
 
-    fn setup() -> (Env, Address, Address, PaymentBridgeClient<'static>, Address, Address, Symbol, Symbol) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        PaymentBridgeClient<'static>,
+        Address,
+        Address,
+        Symbol,
+        Symbol,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -228,8 +264,12 @@ mod test {
         let client = PaymentBridgeClient::new(&env, &contract_id);
         client.initialize(&admin);
 
-        let token_a = env.register_stellar_asset_contract_v2(admin.clone()).address();
-        let token_b = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let token_a = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        let token_b = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
 
         let usdc = symbol_short!("USDC");
         let xlm = symbol_short!("XLM");
@@ -277,7 +317,9 @@ mod test {
         let client = PaymentBridgeClient::new(&env, &contract_id);
         client.initialize(&admin);
 
-        let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
+        let token = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
         let asset = symbol_short!("USDC");
         client.register_anchor(&asset, &token);
     }

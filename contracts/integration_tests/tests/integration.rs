@@ -82,7 +82,13 @@ fn test_rent_distribution_flow() {
     vault_client.set_rent_distributor(&distributor);
     dist_client.set_fraction_vault(&vault);
 
-    let prop_id = register_property(&env, &prop_reg, &property_owner, 100_000, jurisdiction.clone());
+    let prop_id = register_property(
+        &env,
+        &prop_reg,
+        &property_owner,
+        100_000,
+        jurisdiction.clone(),
+    );
 
     vault_client.fractionalize(
         &prop_id,
@@ -113,7 +119,10 @@ fn test_rent_distribution_flow() {
 
     dist_client.claim(&prop_id, &investor);
     let balance_after_second_claim = check_balance(&env, &token, &investor);
-    assert_eq!(balance_after_second_claim, 100_000 - 500 * 100 + 5_000 + 2_500);
+    assert_eq!(
+        balance_after_second_claim,
+        100_000 - 500 * 100 + 5_000 + 2_500
+    );
 }
 
 #[test]
@@ -147,7 +156,8 @@ fn test_mortgage_loan_repay() {
     let token_client = TokenClient::new(&env, &token);
     assert_eq!(token_client.balance(&borrower), 50_000);
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + SECONDS_PER_YEAR);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + SECONDS_PER_YEAR);
 
     mint_tokens(&env, &token, &borrower, 3_000);
     pool_client.repay(&borrower, &loan_id, &53_000i128);

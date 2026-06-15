@@ -1,5 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, IntoVal, String, Symbol, Vec};
+//! On-chain protocol governance with proposal lifecycle. Fraction holders vote proportionally to their holdings. Features timelock-enforced execution.
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, Bytes, Env, IntoVal, String, Symbol, Vec,
+};
 
 const VOTING_PERIOD: u64 = 48 * 3600;
 const TIMELOCK_PERIOD: u64 = 24 * 3600;
@@ -36,6 +39,7 @@ pub struct Governance;
 
 #[contractimpl]
 impl Governance {
+    /// Sets admin and FractionVault address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address, fraction_vault: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -48,20 +52,20 @@ impl Governance {
         env.storage()
             .instance()
             .set(&DataKey::ProposalCounter, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::Quorum, &0u128);
+        env.storage().instance().set(&DataKey::Quorum, &0u128);
         env.storage()
             .instance()
             .set(&DataKey::TrackedProperties, &Vec::<u64>::new(&env));
     }
 
+    /// Updates the quorum required for proposals to pass. Admin-only.
     pub fn set_quorum(env: Env, quorum: u128) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
         env.storage().instance().set(&DataKey::Quorum, &quorum);
     }
 
+    /// Adds a property to the tracked set for voting power computation. Admin-only.
     pub fn add_tracked_property(env: Env, prop_id: u64) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -87,12 +91,8 @@ impl Governance {
         }
     }
 
-    pub fn propose(
-        env: Env,
-        action_type: u32,
-        calldata: Bytes,
-        description: String,
-    ) -> u64 {
+    /// Creates a new proposal. Anyone can propose.
+    pub fn propose(env: Env, action_type: u32, calldata: Bytes, description: String) -> u64 {
         let mut counter: u64 = env
             .storage()
             .instance()
@@ -131,6 +131,7 @@ impl Governance {
         counter
     }
 
+    /// Casts a vote (for/against) on a proposal. Voter must hold fractions.
     pub fn vote(env: Env, voter: Address, proposal_id: u64, support: bool) {
         voter.require_auth();
 
@@ -177,6 +178,7 @@ impl Governance {
         );
     }
 
+    /// Executes a passed proposal after voting and timelock periods have elapsed.
     pub fn execute(env: Env, proposal_id: u64) {
         let mut proposal: ProposalData = env
             .storage()
@@ -212,12 +214,11 @@ impl Governance {
             .instance()
             .set(&DataKey::Proposal(proposal_id), &proposal);
 
-        env.events().publish(
-            (Symbol::new(&env, "ProposalExecuted"), proposal_id),
-            (),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "ProposalExecuted"), proposal_id), ());
     }
 
+    /// Returns the total voting power of a user based on their fraction holdings.
     pub fn voting_power(env: Env, user: Address) -> u128 {
         Governance::voting_power_internal(&env, user)
     }
@@ -248,6 +249,7 @@ impl Governance {
         total
     }
 
+    /// Returns the ProposalData for a given proposal ID.
     pub fn get_proposal(env: Env, proposal_id: u64) -> ProposalData {
         env.storage()
             .instance()
@@ -269,10 +271,7 @@ mod test {
     use soroban_sdk::testutils::Ledger;
     use soroban_sdk::{symbol_short, BytesN, Env};
 
-    fn setup_fraction_vault(
-        env: &Env,
-        admin: &Address,
-    ) -> (Address, u64) {
+    fn setup_fraction_vault(env: &Env, admin: &Address) -> (Address, u64) {
         let property_owner = Address::generate(env);
         let jurisdiction = symbol_short!("US");
 
@@ -299,7 +298,14 @@ mod test {
         let token = env
             .register_stellar_asset_contract_v2(admin.clone())
             .address();
-        vault_client.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        vault_client.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         (vault_id, prop_id)
     }
@@ -467,7 +473,8 @@ mod test {
         let description = String::from_str(&env, "Test");
         let proposal_id = client.propose(&1u32, &calldata, &description);
 
-        env.ledger().set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + 1);
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + 1);
 
         client.vote(&user, &proposal_id, &true);
     }
@@ -515,9 +522,8 @@ mod test {
 
         client.vote(&user, &proposal_id, &true);
 
-        env.ledger().set_timestamp(
-            env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1,
-        );
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1);
 
         client.execute(&proposal_id);
 
@@ -569,7 +575,8 @@ mod test {
 
         client.vote(&user, &proposal_id, &true);
 
-        env.ledger().set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + 1);
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + 1);
 
         client.execute(&proposal_id);
     }
@@ -595,9 +602,8 @@ mod test {
 
         client.vote(&user, &proposal_id, &true);
 
-        env.ledger().set_timestamp(
-            env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1,
-        );
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1);
 
         client.execute(&proposal_id);
         client.execute(&proposal_id);
@@ -636,9 +642,8 @@ mod test {
 
         client.vote(&user, &proposal_id, &true);
 
-        env.ledger().set_timestamp(
-            env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1,
-        );
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1);
 
         client.execute(&proposal_id);
     }
@@ -664,9 +669,8 @@ mod test {
 
         client.vote(&user, &proposal_id, &false);
 
-        env.ledger().set_timestamp(
-            env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1,
-        );
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1);
 
         client.execute(&proposal_id);
     }
@@ -703,9 +707,8 @@ mod test {
         assert_eq!(proposal.for_votes, 200);
         assert_eq!(proposal.against_votes, 50);
 
-        env.ledger().set_timestamp(
-            env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1,
-        );
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + VOTING_PERIOD + TIMELOCK_PERIOD + 1);
 
         client.execute(&proposal_id);
         let proposal = client.get_proposal(&proposal_id);

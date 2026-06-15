@@ -1,11 +1,12 @@
 #![no_std]
+//! Pro-rata rent distribution engine. Deposits are tracked per property and distributed to fraction holders based on their balance.
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, IntoVal, Symbol, Vec};
 
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
     Admin,
-    AccumulatedYield(u64),      // prop_id -> i128 (scaled by 1e12)
+    AccumulatedYield(u64),       // prop_id -> i128 (scaled by 1e12)
     UserLastYield(Address, u64), // (user, prop_id) -> i128 (scaled)
     UserPending(Address, u64),   // (user, prop_id) -> i128
     Schedule(u64),               // prop_id -> u32 (days)
@@ -20,6 +21,7 @@ pub struct RentDistributor;
 
 #[contractimpl]
 impl RentDistributor {
+    /// Sets the admin address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -28,6 +30,7 @@ impl RentDistributor {
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 
+    /// Deposits `amount` of `token` as rent for a property. Caller must authorize and transfer tokens.
     pub fn deposit_rent(env: Env, sender: Address, prop_id: u64, amount: i128, token: Address) {
         sender.require_auth();
         if amount <= 0 {
@@ -38,10 +41,17 @@ impl RentDistributor {
         env.invoke_contract::<()>(
             &token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [sender.to_val(), vault.to_val(), amount.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [sender.to_val(), vault.to_val(), amount.into_val(&env)],
+            ),
         );
 
-        let fraction_vault: Address = env.storage().instance().get(&DataKey::FractionVault).unwrap();
+        let fraction_vault: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FractionVault)
+            .unwrap();
         let info: (u128, i128, Address, Address, Address) = env.invoke_contract(
             &fraction_vault,
             &Symbol::new(&env, "get_fraction_info"),
@@ -59,10 +69,19 @@ impl RentDistributor {
             .checked_div(total_supply as i128)
             .unwrap();
 
-        let current_acc: i128 = env.storage().instance().get(&DataKey::AccumulatedYield(prop_id)).unwrap_or(0);
-        env.storage().instance().set(&DataKey::AccumulatedYield(prop_id), &(current_acc + yield_per_share));
+        let current_acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccumulatedYield(prop_id))
+            .unwrap_or(0);
+        env.storage().instance().set(
+            &DataKey::AccumulatedYield(prop_id),
+            &(current_acc + yield_per_share),
+        );
 
-        env.storage().instance().set(&DataKey::RentToken(prop_id), &token);
+        env.storage()
+            .instance()
+            .set(&DataKey::RentToken(prop_id), &token);
 
         env.events().publish(
             (Symbol::new(&env, "RentDeposited"), prop_id),
@@ -70,6 +89,7 @@ impl RentDistributor {
         );
     }
 
+    /// Triggers yield distribution for a property. Emits a YieldDistributed event.
     pub fn distribute(env: Env, prop_id: u64) {
         env.events().publish(
             (Symbol::new(&env, "YieldDistributed"), prop_id),
@@ -77,6 +97,7 @@ impl RentDistributor {
         );
     }
 
+    /// Claims all pending yield for an investor on a property. Transfers tokens to the investor.
     pub fn claim(env: Env, prop_id: u64, investor: Address) {
         investor.require_auth();
 
@@ -85,17 +106,33 @@ impl RentDistributor {
             panic!("no yield to claim");
         }
 
-        let token: Address = env.storage().instance().get(&DataKey::RentToken(prop_id)).unwrap_or_else(|| panic!("no rent token set"));
-        
-        let current_acc: i128 = env.storage().instance().get(&DataKey::AccumulatedYield(prop_id)).unwrap_or(0);
-        env.storage().instance().set(&DataKey::UserLastYield(investor.clone(), prop_id), &current_acc);
-        env.storage().instance().set(&DataKey::UserPending(investor.clone(), prop_id), &0i128);
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RentToken(prop_id))
+            .unwrap_or_else(|| panic!("no rent token set"));
+
+        let current_acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccumulatedYield(prop_id))
+            .unwrap_or(0);
+        env.storage().instance().set(
+            &DataKey::UserLastYield(investor.clone(), prop_id),
+            &current_acc,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::UserPending(investor.clone(), prop_id), &0i128);
 
         let vault = env.current_contract_address();
         env.invoke_contract::<()>(
             &token,
             &Symbol::new(&env, "transfer"),
-            Vec::from_array(&env, [vault.to_val(), investor.to_val(), pending.into_val(&env)]),
+            Vec::from_array(
+                &env,
+                [vault.to_val(), investor.to_val(), pending.into_val(&env)],
+            ),
         );
 
         env.events().publish(
@@ -104,8 +141,13 @@ impl RentDistributor {
         );
     }
 
+    /// Returns the pending (unclaimed) yield for an investor on a property.
     pub fn pending_yield(env: Env, investor: Address, prop_id: u64) -> i128 {
-        let fraction_vault: Address = env.storage().instance().get(&DataKey::FractionVault).unwrap();
+        let fraction_vault: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FractionVault)
+            .unwrap();
         let balance: u128 = env.invoke_contract(
             &fraction_vault,
             &Symbol::new(&env, "get_balance"),
@@ -115,37 +157,70 @@ impl RentDistributor {
         RentDistributor::pending_yield_internal(&env, investor, prop_id, balance)
     }
 
+    /// Sets the distribution interval in days for a property. Admin-only.
     pub fn set_schedule(env: Env, prop_id: u64, interval_days: u32) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        env.storage().instance().set(&DataKey::Schedule(prop_id), &interval_days);
+        env.storage()
+            .instance()
+            .set(&DataKey::Schedule(prop_id), &interval_days);
     }
 
+    /// Sets the FractionVault contract address for balance queries. Admin-only.
     pub fn set_fraction_vault(env: Env, vault: Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
-        env.storage().instance().set(&DataKey::FractionVault, &vault);
+        env.storage()
+            .instance()
+            .set(&DataKey::FractionVault, &vault);
     }
 
+    /// Called by FractionVault when a user's balance changes. Records the yield snapshot.
     pub fn checkpoint(env: Env, caller: Address, investor: Address, prop_id: u64, balance: u128) {
         caller.require_auth();
-        let fraction_vault: Address = env.storage().instance().get(&DataKey::FractionVault).unwrap();
+        let fraction_vault: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FractionVault)
+            .unwrap();
         if caller != fraction_vault {
             panic!("unauthorized checkpoint");
         }
 
-        let pending = RentDistributor::pending_yield_internal(&env, investor.clone(), prop_id, balance);
-        let current_acc: i128 = env.storage().instance().get(&DataKey::AccumulatedYield(prop_id)).unwrap_or(0);
-        
-        env.storage().instance().set(&DataKey::UserPending(investor.clone(), prop_id), &pending);
-        env.storage().instance().set(&DataKey::UserLastYield(investor.clone(), prop_id), &current_acc);
+        let pending =
+            RentDistributor::pending_yield_internal(&env, investor.clone(), prop_id, balance);
+        let current_acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccumulatedYield(prop_id))
+            .unwrap_or(0);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::UserPending(investor.clone(), prop_id), &pending);
+        env.storage().instance().set(
+            &DataKey::UserLastYield(investor.clone(), prop_id),
+            &current_acc,
+        );
     }
 
     fn pending_yield_internal(env: &Env, investor: Address, prop_id: u64, balance: u128) -> i128 {
-        let current_acc: i128 = env.storage().instance().get(&DataKey::AccumulatedYield(prop_id)).unwrap_or(0);
-        let user_last_acc: i128 = env.storage().instance().get(&DataKey::UserLastYield(investor.clone(), prop_id)).unwrap_or(0);
-        let user_pending: i128 = env.storage().instance().get(&DataKey::UserPending(investor.clone(), prop_id)).unwrap_or(0);
+        let current_acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccumulatedYield(prop_id))
+            .unwrap_or(0);
+        let user_last_acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UserLastYield(investor.clone(), prop_id))
+            .unwrap_or(0);
+        let user_pending: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::UserPending(investor.clone(), prop_id))
+            .unwrap_or(0);
 
         let diff = current_acc - user_last_acc;
         if diff <= 0 {
@@ -165,13 +240,20 @@ impl RentDistributor {
 #[cfg(test)]
 mod test {
     use super::*;
+    use propfi_compliance_registry::{ComplianceRegistry, ComplianceRegistryClient};
     use propfi_fraction_vault::{FractionVault, FractionVaultClient};
     use propfi_property_registry::{PropertyRegistry, PropertyRegistryClient};
-    use propfi_compliance_registry::{ComplianceRegistry, ComplianceRegistryClient};
     use soroban_sdk::testutils::{Address as _, Ledger};
     use soroban_sdk::{symbol_short, BytesN, Env};
 
-    fn setup() -> (Env, Address, Address, RentDistributorClient<'static>, Address, Address) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        RentDistributorClient<'static>,
+        Address,
+        Address,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
         let admin = Address::generate(&env);
@@ -186,14 +268,28 @@ mod test {
         prop_reg_client.initialize(&admin);
 
         let doc_hash = BytesN::from_array(&env, &[0u8; 32]);
-        let prop_id = prop_reg_client.register_property(&property_owner, &100_000i128, &doc_hash, &symbol_short!("US"));
+        let prop_id = prop_reg_client.register_property(
+            &property_owner,
+            &100_000i128,
+            &doc_hash,
+            &symbol_short!("US"),
+        );
 
         let vault_id = env.register_contract(None, FractionVault);
         let vault_client = FractionVaultClient::new(&env, &vault_id);
         vault_client.initialize(&admin);
 
-        let token = env.register_stellar_asset_contract_v2(admin.clone()).address();
-        vault_client.fractionalize(&prop_id, &1000u128, &100i128, &token, &prop_reg_id, &compliance_id);
+        let token = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        vault_client.fractionalize(
+            &prop_id,
+            &1000u128,
+            &100i128,
+            &token,
+            &prop_reg_id,
+            &compliance_id,
+        );
 
         let distributor_id = env.register_contract(None, RentDistributor);
         let distributor_client = RentDistributorClient::new(&env, &distributor_id);
@@ -202,7 +298,14 @@ mod test {
 
         vault_client.set_rent_distributor(&distributor_id);
 
-        (env, admin, property_owner, distributor_client, token, vault_id)
+        (
+            env,
+            admin,
+            property_owner,
+            distributor_client,
+            token,
+            vault_id,
+        )
     }
 
     #[test]
@@ -215,7 +318,12 @@ mod test {
         let info = vault_client.get_fraction_info(&prop_id);
         let compliance_id = info.4;
         let compliance_client = ComplianceRegistryClient::new(&env, &compliance_id);
-        compliance_client.attest(&investor, &soroban_sdk::Bytes::from_slice(&env, b"p"), &symbol_short!("US"), &365);
+        compliance_client.attest(
+            &investor,
+            &soroban_sdk::Bytes::from_slice(&env, b"p"),
+            &symbol_short!("US"),
+            &365,
+        );
 
         let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
         sac.mint(&investor, &100_000i128);
@@ -240,7 +348,12 @@ mod test {
         let vault_client = FractionVaultClient::new(&env, &vault_id);
         let info = vault_client.get_fraction_info(&prop_id);
         let compliance_id = info.4;
-        ComplianceRegistryClient::new(&env, &compliance_id).attest(&investor, &soroban_sdk::Bytes::from_slice(&env, b"p"), &symbol_short!("US"), &365);
+        ComplianceRegistryClient::new(&env, &compliance_id).attest(
+            &investor,
+            &soroban_sdk::Bytes::from_slice(&env, b"p"),
+            &symbol_short!("US"),
+            &365,
+        );
 
         let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
         sac.mint(&investor, &100_000i128);
@@ -266,11 +379,16 @@ mod test {
         let vault_client = FractionVaultClient::new(&env, &vault_id);
         let info = vault_client.get_fraction_info(&prop_id);
         let compliance_id = info.4;
-        ComplianceRegistryClient::new(&env, &compliance_id).attest(&investor, &soroban_sdk::Bytes::from_slice(&env, b"p"), &symbol_short!("US"), &365);
+        ComplianceRegistryClient::new(&env, &compliance_id).attest(
+            &investor,
+            &soroban_sdk::Bytes::from_slice(&env, b"p"),
+            &symbol_short!("US"),
+            &365,
+        );
 
         let sac = soroban_sdk::token::StellarAssetClient::new(&env, &token);
         sac.mint(&investor, &200_000i128);
-        
+
         vault_client.buy_fraction(&investor, &prop_id, &100u128);
 
         sac.mint(&admin, &20_000i128);
@@ -278,7 +396,7 @@ mod test {
         assert_eq!(distributor.pending_yield(&investor, &prop_id), 1_000);
 
         vault_client.buy_fraction(&investor, &prop_id, &400u128);
-        assert_eq!(distributor.pending_yield(&investor, &prop_id), 1_000); 
+        assert_eq!(distributor.pending_yield(&investor, &prop_id), 1_000);
 
         distributor.deposit_rent(&admin, &prop_id, &10_000i128, &token);
         assert_eq!(distributor.pending_yield(&investor, &prop_id), 6_000);

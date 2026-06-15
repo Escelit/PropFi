@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+//! Multi-source price oracle with weighted aggregation and TWAP. Manages oracle registry, price submissions, staleness detection, and time-weighted average price computation.
 use propfi_types::PriceData;
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 #[contracttype]
@@ -39,6 +40,7 @@ pub struct OracleAdapter;
 
 #[contractimpl]
 impl OracleAdapter {
+    /// Sets admin and staleness threshold. Called once at deployment.
     pub fn initialize(env: Env, admin: Address, staleness_threshold: u64) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -50,6 +52,7 @@ impl OracleAdapter {
             .set(&DataKey::StalenessThreshold, &staleness_threshold);
     }
 
+    /// Registers an oracle with the given weight. Only callable by admin.
     pub fn add_oracle(env: Env, oracle_addr: Address, weight: u32) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -66,6 +69,7 @@ impl OracleAdapter {
             .publish((Symbol::new(&env, "OracleAdded"), oracle_addr), weight);
     }
 
+    /// Removes an oracle from the registry. Only callable by admin.
     pub fn remove_oracle(env: Env, oracle_addr: Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -84,6 +88,7 @@ impl OracleAdapter {
             .publish((Symbol::new(&env, "OracleRemoved"), oracle_addr), ());
     }
 
+    /// Records a price submission from an oracle for the given asset. Oracle must self-authenticate.
     pub fn submit_price(env: Env, oracle: Address, asset: Symbol, price: i128) {
         oracle.require_auth();
 
@@ -151,7 +156,7 @@ impl OracleAdapter {
             0
         };
 
-        let oracle_count = submissions.len() as u32;
+        let oracle_count = submissions.len();
         let price_data = PriceData {
             price: avg_price,
             timestamp,
@@ -180,6 +185,7 @@ impl OracleAdapter {
         );
     }
 
+    /// Returns the latest weighted aggregate price for an asset, or panics if no data.
     pub fn get_price(env: Env, asset: Symbol) -> PriceData {
         let price_data: PriceData = env
             .storage()
@@ -211,6 +217,7 @@ impl OracleAdapter {
         price_data
     }
 
+    /// Computes the time-weighted average price over the given window (in seconds).
     pub fn twap(env: Env, asset: Symbol, window_secs: u64) -> i128 {
         let samples: Vec<PriceSample> = env
             .storage()
@@ -253,6 +260,7 @@ impl OracleAdapter {
         weighted_sum / (total_time as i128)
     }
 
+    /// Returns the registration info for a given oracle address.
     pub fn get_oracle_info(env: Env, oracle_addr: Address) -> OracleInfo {
         env.storage()
             .instance()
@@ -286,8 +294,7 @@ mod test {
         (env, admin, oracle, client)
     }
 
-    fn setup_with_oracle(
-    ) -> (Env, Address, Address, Symbol, OracleAdapterClient<'static>) {
+    fn setup_with_oracle() -> (Env, Address, Address, Symbol, OracleAdapterClient<'static>) {
         let (env, admin, oracle, client) = setup();
         let asset = Symbol::new(&env, "BTC_USD");
 
@@ -451,4 +458,3 @@ mod test {
         client.submit_price(&oracle, &asset, &50000i128);
     }
 }
-

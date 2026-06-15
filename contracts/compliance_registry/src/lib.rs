@@ -1,13 +1,24 @@
+//! KYC/AML attestation registry with jurisdiction-aware compliance gating.
+//!
+//! Stores proof hashes (never raw PII), manages attestation expiry, and enforces
+//! configurable jurisdiction rules. Consumed by PropertyRegistry, FractionVault,
+//! and other contracts for compliance checks on transfers and investments.
+
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Symbol};
 use propfi_types::JurisdictionRules;
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Symbol};
 
 #[derive(Clone, Debug, PartialEq)]
 #[contracttype]
+/// A KYC attestation record for a user.
 pub struct Attestation {
+    /// Hash of the ZK proof (never raw PII stored on-chain)
     pub proof_hash: Bytes,
+    /// Jurisdiction this attestation applies to (e.g., "US", "EU")
     pub jurisdiction: Symbol,
+    /// Ledger timestamp when this attestation expires
     pub expiry: u64,
+    /// Whether the attestation is currently active (may be revoked)
     pub active: bool,
 }
 
@@ -26,6 +37,7 @@ pub struct ComplianceRegistry;
 
 #[contractimpl]
 impl ComplianceRegistry {
+    /// Sets the admin address. Called once at deployment.
     pub fn initialize(env: Env, admin: Address) {
         let existing: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if existing.is_some() {
@@ -34,6 +46,8 @@ impl ComplianceRegistry {
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 
+    /// Records a KYC attestation for `user` under the given `jurisdiction`.
+    /// Only callable by the admin. Emits an `Attested` event.
     pub fn attest(
         env: Env,
         user: Address,
@@ -44,7 +58,9 @@ impl ComplianceRegistry {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        let expiry = env.ledger().timestamp()
+        let expiry = env
+            .ledger()
+            .timestamp()
             .checked_add((duration_days as u64).checked_mul(DAY).unwrap())
             .unwrap();
 
@@ -65,6 +81,8 @@ impl ComplianceRegistry {
         );
     }
 
+    /// Checks whether `user` has a valid, non-expired attestation for `jurisdiction`.
+    /// Also enforces min-remaining-days rules if configured.
     pub fn is_compliant(env: Env, user: Address, jurisdiction: Symbol) -> bool {
         let key = DataKey::Attestation(user);
         let attestation = match env.storage().instance().get::<DataKey, Attestation>(&key) {
@@ -99,20 +117,24 @@ impl ComplianceRegistry {
         true
     }
 
+    /// Revokes a user's attestation. Only callable by the admin.
+    /// Emits a `Revoked` event. All compliance checks will fail for this user.
     pub fn revoke(env: Env, user: Address) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
         let key = DataKey::Attestation(user.clone());
-        let mut attestation: Attestation =
-            env.storage().instance().get(&key).unwrap();
+        let mut attestation: Attestation = env.storage().instance().get(&key).unwrap();
         attestation.active = false;
 
         env.storage().instance().set(&key, &attestation);
 
-        env.events().publish((Symbol::new(&env, "Revoked"), user), ());
+        env.events()
+            .publish((Symbol::new(&env, "Revoked"), user), ());
     }
 
+    /// Configures compliance rules for a jurisdiction (e.g., min attestation duration).
+    /// Only callable by the admin. Emits a `RulesUpdated` event.
     pub fn set_jurisdiction_rules(env: Env, jurisdiction: Symbol, rules: JurisdictionRules) {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
@@ -125,6 +147,8 @@ impl ComplianceRegistry {
             .publish((Symbol::new(&env, "RulesUpdated"), jurisdiction), ());
     }
 
+    /// Returns the ledger timestamp at which the user's attestation expires.
+    /// Returns 0 if the user has no attestation.
     pub fn attestation_expiry(env: Env, user: Address) -> u64 {
         let key = DataKey::Attestation(user);
         match env.storage().instance().get::<DataKey, Attestation>(&key) {
@@ -183,7 +207,8 @@ mod test {
 
         assert!(client.is_compliant(&user, &jurisdiction));
 
-        env.ledger().set_timestamp(env.ledger().timestamp() + 2 * DAY);
+        env.ledger()
+            .set_timestamp(env.ledger().timestamp() + 2 * DAY);
 
         assert!(!client.is_compliant(&user, &jurisdiction));
     }

@@ -66,13 +66,29 @@ pub struct JurisdictionRules {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum GovernanceAction {
-    UpdateLTV { new_max: u32 },
-    UpdateLiquidationThreshold { new_threshold: u32 },
-    AddJurisdiction { jurisdiction: Symbol },
-    RemoveJurisdiction { jurisdiction: Symbol },
-    UpdateOracleWeight { oracle: Address, weight: u32 },
-    UpdateFeeRate { new_rate: u32 },
-    UpgradeContract { contract_id: Address, wasm_hash: BytesN<32> },
+    UpdateLTV {
+        new_max: u32,
+    },
+    UpdateLiquidationThreshold {
+        new_threshold: u32,
+    },
+    AddJurisdiction {
+        jurisdiction: Symbol,
+    },
+    RemoveJurisdiction {
+        jurisdiction: Symbol,
+    },
+    UpdateOracleWeight {
+        oracle: Address,
+        weight: u32,
+    },
+    UpdateFeeRate {
+        new_rate: u32,
+    },
+    UpgradeContract {
+        contract_id: Address,
+        wasm_hash: BytesN<32>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
