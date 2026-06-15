@@ -116,11 +116,12 @@ PropertyRegistry ◄────── FractionVault ◄────── RentD
 The canonical RWA layer. Tokenizes real-world properties as on-chain assets with oracle-fed valuations and legally-binding document hashes.
 
 ```rust
-pub fn register_property(env: Env, owner: Address, valuation: i128, doc_hash: BytesN<32>) -> u64
-pub fn update_valuation(env: Env, prop_id: u64, new_val: i128, oracle_sig: BytesN<64>)
-pub fn transfer_ownership(env: Env, prop_id: u64, to: Address, compliance_proof: Bytes)
+pub fn register_property(env: Env, owner: Address, valuation: i128, doc_hash: BytesN<32>, jurisdiction: Symbol) -> u64
+pub fn update_valuation(env: Env, prop_id: u64, new_val: i128, oracle_contract: Address, asset: Symbol)
+pub fn transfer_ownership(env: Env, prop_id: u64, to: Address, compliance_contract: Address)
 pub fn get_property(env: Env, prop_id: u64) -> PropertyData
 pub fn set_status(env: Env, prop_id: u64, status: PropertyStatus)
+pub fn get_property_jurisdiction(env: Env, prop_id: u64) -> Symbol
 ```
 
 **Events:** `PropertyRegistered` · `ValuationUpdated` · `OwnershipTransferred`
@@ -132,11 +133,14 @@ pub fn set_status(env: Env, prop_id: u64, status: PropertyStatus)
 Splits a tokenized property into tradeable ERC-1155-style fraction tokens. Powers fractional ownership and secondary market trading.
 
 ```rust
-pub fn fractionalize(env: Env, prop_id: u64, total_supply: u128, price: i128)
-pub fn buy_fraction(env: Env, prop_id: u64, amount: u128)
-pub fn sell_fraction(env: Env, prop_id: u64, amount: u128, min_price: i128)
+pub fn initialize(env: Env, admin: Address)
+pub fn fractionalize(env: Env, prop_id: u64, total_supply: u128, price: i128, payment_token: Address, property_registry: Address, compliance_registry: Address)
+pub fn buy_fraction(env: Env, buyer: Address, prop_id: u64, amount: u128)
+pub fn sell_fraction(env: Env, seller: Address, prop_id: u64, amount: u128, min_price: i128)
 pub fn get_balance(env: Env, investor: Address, prop_id: u64) -> u128
 pub fn total_holders(env: Env, prop_id: u64) -> u32
+pub fn get_fraction_info(env: Env, prop_id: u64) -> (u128, i128, Address, Address, Address)
+pub fn set_rent_distributor(env: Env, distributor: Address)
 ```
 
 **Events:** `Fractionalized` · `FractionPurchased` · `FractionSold`
@@ -148,11 +152,14 @@ pub fn total_holders(env: Env, prop_id: u64) -> u32
 Streams and distributes rent payments proportionally across all fraction holders. Supports XLM and USDC, batch payouts, and configurable distribution schedules.
 
 ```rust
-pub fn deposit_rent(env: Env, prop_id: u64, amount: i128, token: Address)
+pub fn initialize(env: Env, admin: Address)
+pub fn deposit_rent(env: Env, sender: Address, prop_id: u64, amount: i128, token: Address)
 pub fn distribute(env: Env, prop_id: u64)
 pub fn claim(env: Env, prop_id: u64, investor: Address)
 pub fn set_schedule(env: Env, prop_id: u64, interval_days: u32)
+pub fn set_fraction_vault(env: Env, vault: Address)
 pub fn pending_yield(env: Env, investor: Address, prop_id: u64) -> i128
+pub fn checkpoint(env: Env, caller: Address, investor: Address, prop_id: u64, balance: u128)
 ```
 
 **Events:** `RentDeposited` · `YieldDistributed` · `YieldClaimed`
@@ -164,11 +171,11 @@ pub fn pending_yield(env: Env, investor: Address, prop_id: u64) -> i128
 Permissionless on-chain lending. Property owners borrow against tokenized equity; lenders supply liquidity and earn interest. LTV-gated with automated liquidation triggers.
 
 ```rust
-pub fn open_loan(env: Env, prop_id: u64, amount: i128, ltv: u32)
-pub fn repay(env: Env, loan_id: u64, amount: i128)
-pub fn liquidate(env: Env, loan_id: u64)
-pub fn deposit_liquidity(env: Env, amount: i128)
-pub fn withdraw_liquidity(env: Env, amount: i128)
+pub fn open_loan(env: Env, borrower: Address, prop_id: u64, amount: i128) -> u64
+pub fn repay(env: Env, borrower: Address, loan_id: u64, amount: i128)
+pub fn liquidate(env: Env, liquidator: Address, loan_id: u64)
+pub fn deposit_liquidity(env: Env, lp: Address, amount: i128)
+pub fn withdraw_liquidity(env: Env, lp: Address, amount: i128)
 pub fn loan_health(env: Env, loan_id: u64) -> HealthFactor
 ```
 
@@ -183,10 +190,12 @@ pub fn loan_health(env: Env, loan_id: u64) -> HealthFactor
 Cross-border payment and remittance layer. Wraps Stellar's native path payments for multi-currency collection and payout. SEP-24 and SEP-31 anchor integration for fiat on/off-ramps.
 
 ```rust
-pub fn send(env: Env, from: Address, to: Address, amount: i128, src: Asset, dst: Asset)
-pub fn batch_send(env: Env, recipients: Vec<(Address, i128)>)
-pub fn register_anchor(env: Env, anchor_addr: Address, asset: Asset)
-pub fn estimate_path(env: Env, src: Asset, dst: Asset, amount: i128) -> PathQuote
+pub fn deposit(env: Env, user: Address, asset: Symbol, amount: i128)
+pub fn withdraw(env: Env, user: Address, asset: Symbol, amount: i128)
+pub fn send(env: Env, from: Address, to: Address, amount: i128, src: Symbol, dst: Symbol)
+pub fn batch_send(env: Env, from: Address, recipients: Vec<(Address, i128)>, src: Symbol, dst: Symbol)
+pub fn register_anchor(env: Env, asset: Symbol, token_address: Address)
+pub fn estimate_path(env: Env, src: Symbol, dst: Symbol, amount: i128) -> PathQuote
 ```
 
 **Events:** `PaymentSent` · `BatchDispatched` · `AnchorRegistered`
@@ -198,10 +207,12 @@ pub fn estimate_path(env: Env, src: Asset, dst: Asset, amount: i128) -> PathQuot
 Multi-source price aggregation with TWAP support. Feeds property valuations to `PropertyRegistry` and LTV calculations to `MortgagePool`. Staleness detection built in.
 
 ```rust
-pub fn submit_price(env: Env, asset: Symbol, price: i128, timestamp: u64, sig: BytesN<64>)
+pub fn submit_price(env: Env, oracle: Address, asset: Symbol, price: i128)
 pub fn get_price(env: Env, asset: Symbol) -> PriceData
 pub fn add_oracle(env: Env, oracle_addr: Address, weight: u32)
+pub fn remove_oracle(env: Env, oracle_addr: Address)
 pub fn twap(env: Env, asset: Symbol, window_secs: u64) -> i128
+pub fn get_oracle_info(env: Env, oracle_addr: Address) -> OracleInfo
 ```
 
 **Events:** `PriceUpdated` · `OracleAdded` · `StaleAlert`
@@ -213,9 +224,10 @@ pub fn twap(env: Env, asset: Symbol, window_secs: u64) -> i128
 Zero-knowledge KYC/AML attestation layer. Stores proof hashes — never raw PII. Issues compliance credentials consumed by all other contracts. Jurisdiction-aware rule configuration.
 
 ```rust
-pub fn attest(env: Env, user: Address, zk_proof: Bytes, jurisdiction: Symbol)
+pub fn initialize(env: Env, admin: Address)
+pub fn attest(env: Env, user: Address, proof_hash: Bytes, jurisdiction: Symbol, duration_days: u32)
 pub fn is_compliant(env: Env, user: Address, jurisdiction: Symbol) -> bool
-pub fn revoke(env: Env, user: Address, reason: Symbol)
+pub fn revoke(env: Env, user: Address)
 pub fn set_jurisdiction_rules(env: Env, jurisdiction: Symbol, rules: JurisdictionRules)
 pub fn attestation_expiry(env: Env, user: Address) -> u64
 ```
@@ -229,10 +241,14 @@ pub fn attestation_expiry(env: Env, user: Address) -> u64
 On-chain protocol governance. Proposals are voted on by fraction holders; vote weight is proportional to aggregate holdings. Timelock-enforced execution.
 
 ```rust
-pub fn propose(env: Env, action: GovernanceAction, calldata: Bytes, description: String) -> u64
-pub fn vote(env: Env, proposal_id: u64, support: bool)
+pub fn initialize(env: Env, admin: Address, fraction_vault: Address)
+pub fn set_quorum(env: Env, quorum: u128)
+pub fn add_tracked_property(env: Env, prop_id: u64)
+pub fn propose(env: Env, action_type: u32, calldata: Bytes, description: String) -> u64
+pub fn vote(env: Env, voter: Address, proposal_id: u64, support: bool)
 pub fn execute(env: Env, proposal_id: u64)
 pub fn voting_power(env: Env, user: Address) -> u128
+pub fn get_proposal(env: Env, proposal_id: u64) -> ProposalData
 ```
 
 **Timelock:** 48 hours. **Quorum:** 10% of total fraction supply.
@@ -337,12 +353,15 @@ propfi/
 │   └── package.json
 │
 ├── frontend/                         # Next.js dApp
-│   ├── app/
-│   │   ├── dashboard/
-│   │   ├── properties/
-│   │   ├── invest/
-│   │   └── borrow/
-│   ├── components/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── dashboard/
+│   │   │   ├── properties/
+│   │   │   └── compliance/
+│   │   ├── components/
+│   │   │   └── ui/               # shadcn/ui components
+│   │   ├── lib/                  # SDK integration, utilities
+│   │   └── styles/
 │   └── package.json
 │
 ├── scripts/                          # Deployment & setup scripts
@@ -523,19 +542,38 @@ The PropFi dApp is a Next.js 14 application with Freighter wallet integration.
 |---|---|
 | `/dashboard` | Portfolio overview — holdings, yield, loans |
 | `/properties` | Browse and search tokenized properties |
-| `/properties/[id]` | Property detail — fractions, rent history, valuation |
-| `/invest` | Buy and sell fractions |
-| `/borrow` | Open and manage mortgage loans |
-| `/governance` | Active proposals and voting |
 | `/compliance` | KYC attestation and credential management |
 
-### Connect wallet
+### SDK usage
 
-```tsx
-import { getFreighter } from '@stellar/freighter-api'
+```typescript
+import { createPropFi } from '@propfi/sdk';
 
-const freighter = await getFreighter()
-const publicKey = await freighter.getPublicKey()
+const propfi = createPropFi({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  complianceRegistryId: 'C...',
+  propertyRegistryId: 'C...',
+  fractionVaultId: 'C...',
+  mortgagePoolId: 'C...',
+});
+
+// Read a property
+const property = await propfi.propertyRegistry.getProperty(1);
+
+// Check compliance
+const ok = await propfi.complianceRegistry.isCompliant('G...', 'US');
+
+// Submit a transaction with Freighter
+const signer = {
+  async getPublicKey() { return window.freighter.getPublicKey().then(r => r.publicKey); },
+  async signTransaction(txXdr: string) {
+    return window.freighter.signTransaction(txXdr, {
+      networkPassphrase: 'Test SDF Network ; September 2015',
+    }).then(r => r.signedTxXdr);
+  },
+};
+
+await propfi.fractionVault.buyFraction('G...', 1, 10n, signer);
 ```
 
 ---
