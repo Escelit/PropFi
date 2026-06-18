@@ -19,7 +19,7 @@
     "@stellar/stellar-sdk": "^12.1.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0"
+    "typescript": "^6.0.3"
   },
   "license": "MIT"
 }
