@@ -367,7 +367,7 @@ mod test {
     #[test]
     #[should_panic(expected = "insufficient balance")]
     fn test_withdraw_insufficient_balance() {
-        let (env, _admin, user, client, _token_a, _token_b, usdc, _xlm) = setup();
+        let (_env, _admin, user, client, _token_a, _token_b, usdc, _xlm) = setup();
         client.withdraw(&user, &usdc, &100i128);
     }
 
