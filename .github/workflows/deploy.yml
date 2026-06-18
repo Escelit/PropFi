@@ -34,10 +34,8 @@ jobs:
           ADMIN_PUBLIC_KEY=${{ secrets.ADMIN_PUBLIC_KEY }}
           STALENESS_THRESHOLD=${{ vars.STALENESS_THRESHOLD || '3600' }}
           EOF
-          # Write secret key to temp file and use it
-          echo "${{ secrets.ADMIN_SECRET_KEY }}" > temp_secret.key
-          soroban keys add deployer --secret-key-file temp_secret.key --network testnet
-          rm temp_secret.key
+          # Use --secret-key directly with the value
+          soroban keys add deployer --secret-key "${{ secrets.ADMIN_SECRET_KEY }}" --network testnet
       - name: Deploy contracts
         run: |
           ./scripts/deploy.sh --network testnet
@@ -71,10 +69,8 @@ jobs:
           ORACLE_PUBLIC_KEYS=${{ secrets.ORACLE_PUBLIC_KEYS }}
           ORACLE_WEIGHTS=${{ vars.ORACLE_WEIGHTS || '' }}
           EOF
-          # Write secret key to temp file and use it
-          echo "${{ secrets.ADMIN_SECRET_KEY }}" > temp_secret.key
-          soroban keys add deployer --secret-key-file temp_secret.key --network mainnet
-          rm temp_secret.key
+          # Use --secret-key directly with the value
+          soroban keys add deployer --secret-key "${{ secrets.ADMIN_SECRET_KEY }}" --network mainnet
       - name: Deploy contracts
         run: |
           ./scripts/deploy.sh --network mainnet --confirm
