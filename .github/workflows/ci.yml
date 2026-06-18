@@ -20,7 +20,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --workspace --target wasm32-unknown-unknown --release
+      - run: cargo build --workspace --target wasm32-unknown-unknown --release --exclude propfi-integration-tests
       - run: cargo build --workspace
 
   test:

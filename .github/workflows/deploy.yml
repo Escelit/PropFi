@@ -20,6 +20,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y libdbus-1-dev pkg-config
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
@@ -45,6 +49,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y libdbus-1-dev pkg-config
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
