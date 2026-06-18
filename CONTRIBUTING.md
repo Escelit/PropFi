@@ -104,8 +104,11 @@ All changes must include tests.
 
 ### Integration tests
 
-- See `tests/integration/` for the full protocol integration test suite.
-- Ensure integration tests pass for any cross-contract changes.
+- Integration tests live in `contracts/integration_tests/`.
+- Ensure integration tests pass for any cross-contract changes:
+  ```bash
+  cargo test -p propfi-integration-tests
+  ```
 
 ## Pull Request Process
 

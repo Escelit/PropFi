@@ -8,6 +8,9 @@ crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = { version = "21", features = ["testutils"] }
+soroban-sdk = "21"
 propfi-types = { path = "../types" }
+
+[dev-dependencies]
+soroban-sdk = { version = "21", features = ["testutils"] }
 

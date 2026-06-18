@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "fmt": "prettier --write .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@propfi/sdk": "file:../sdk",

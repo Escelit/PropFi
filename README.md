@@ -51,15 +51,15 @@ Real estate is the world's largest asset class — **$326 trillion** — yet it 
 
 PropFi fixes this at the protocol layer:
 
-| Problem | PropFi Solution |
-|---|---|
-| Minimum $100k+ investment | Fractional ownership from $10 |
-| Settlement takes weeks | On-chain, finalized in seconds |
-| Rent lost to intermediaries | Automated pro-rata streaming |
-| No credit access for property owners | Permissionless on-chain mortgages |
-| Cross-border payments expensive & slow | Stellar path payments + SEP-24/31 |
-| KYC processes expose personal data | Zero-knowledge attestation proofs |
-| Protocol changes by committee | On-chain fraction-holder governance |
+| Problem                                | PropFi Solution                     |
+| -------------------------------------- | ----------------------------------- |
+| Minimum $100k+ investment              | Fractional ownership from $10       |
+| Settlement takes weeks                 | On-chain, finalized in seconds      |
+| Rent lost to intermediaries            | Automated pro-rata streaming        |
+| No credit access for property owners   | Permissionless on-chain mortgages   |
+| Cross-border payments expensive & slow | Stellar path payments + SEP-24/31   |
+| KYC processes expose personal data     | Zero-knowledge attestation proofs   |
+| Protocol changes by committee          | On-chain fraction-holder governance |
 
 ---
 
@@ -292,18 +292,18 @@ pub fn get_proposal(env: Env, proposal_id: u64) -> ProposalData
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Smart contracts | Rust · Soroban SDK 21.x · stellar-xdr |
-| Testing | Soroban test harness · cargo test |
-| Contract CLI | soroban-cli |
-| Indexer | Stellar Horizon API · Event stream · PostgreSQL |
-| Backend SDK | Node.js · TypeScript · stellar-sdk · Prisma |
-| Frontend | Next.js 14 · Freighter Wallet · shadcn/ui · TailwindCSS |
-| Compliance | ZK attestation proofs · Verifiable Credentials · W3C DID |
-| Auth | Stellar keypairs · Freighter · WalletConnect |
-| Infrastructure | Docker · Docker Compose · GitHub Actions |
-| Network | Stellar Testnet (dev) · Stellar Mainnet (prod) |
+| Layer           | Technology                                               |
+| --------------- | -------------------------------------------------------- |
+| Smart contracts | Rust · Soroban SDK 21.x · stellar-xdr                    |
+| Testing         | Soroban test harness · cargo test                        |
+| Contract CLI    | soroban-cli                                              |
+| Indexer         | Stellar Horizon API · Event stream · PostgreSQL          |
+| Backend SDK     | Node.js · TypeScript · stellar-sdk · Prisma              |
+| Frontend        | Next.js 14 · Freighter Wallet · shadcn/ui · TailwindCSS  |
+| Compliance      | ZK attestation proofs · Verifiable Credentials · W3C DID |
+| Auth            | Stellar keypairs · Freighter · WalletConnect             |
+| Infrastructure  | Docker · Docker Compose · GitHub Actions                 |
+| Network         | Stellar Testnet (dev) · Stellar Mainnet (prod)           |
 
 ---
 
@@ -333,9 +333,10 @@ propfi/
 │   ├── compliance_registry/
 │   │   ├── src/lib.rs
 │   │   └── Cargo.toml
-│   └── governance/
+│   ├── governance/
 │       ├── src/lib.rs
 │       └── Cargo.toml
+│   └── integration_tests/            # Cross-contract integration tests
 │
 ├── sdk/                              # TypeScript client SDK
 │   ├── src/
@@ -368,10 +369,6 @@ propfi/
 │   ├── deploy.sh
 │   ├── setup_testnet.sh
 │   └── seed_data.ts
-│
-├── tests/                            # Integration tests
-│   ├── integration/
-│   └── e2e/
 │
 ├── .github/
 │   └── workflows/
@@ -485,12 +482,10 @@ cargo test --workspace
 ### Integration tests
 
 ```bash
-cd tests/integration
-npm install
-npm test
+cargo test -p propfi-integration-tests
 ```
 
-Integration tests spin up a local Stellar sandbox, deploy all contracts, and run full protocol flows end-to-end.
+Integration tests deploy all contracts to a local environment and run full protocol flows end-to-end.
 
 ### Coverage report
 
@@ -538,42 +533,46 @@ The PropFi dApp is a Next.js 14 application with Freighter wallet integration.
 
 **Key pages:**
 
-| Route | Description |
-|---|---|
-| `/dashboard` | Portfolio overview — holdings, yield, loans |
-| `/properties` | Browse and search tokenized properties |
-| `/compliance` | KYC attestation and credential management |
+| Route         | Description                                 |
+| ------------- | ------------------------------------------- |
+| `/dashboard`  | Portfolio overview — holdings, yield, loans |
+| `/properties` | Browse and search tokenized properties      |
+| `/compliance` | KYC attestation and credential management   |
 
 ### SDK usage
 
 ```typescript
-import { createPropFi } from '@propfi/sdk';
+import { createPropFi } from "@propfi/sdk";
 
 const propfi = createPropFi({
-  rpcUrl: 'https://soroban-testnet.stellar.org',
-  complianceRegistryId: 'C...',
-  propertyRegistryId: 'C...',
-  fractionVaultId: 'C...',
-  mortgagePoolId: 'C...',
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  complianceRegistryId: "C...",
+  propertyRegistryId: "C...",
+  fractionVaultId: "C...",
+  mortgagePoolId: "C...",
 });
 
 // Read a property
 const property = await propfi.propertyRegistry.getProperty(1);
 
 // Check compliance
-const ok = await propfi.complianceRegistry.isCompliant('G...', 'US');
+const ok = await propfi.complianceRegistry.isCompliant("G...", "US");
 
 // Submit a transaction with Freighter
 const signer = {
-  async getPublicKey() { return window.freighter.getPublicKey().then(r => r.publicKey); },
+  async getPublicKey() {
+    return window.freighter.getPublicKey().then((r) => r.publicKey);
+  },
   async signTransaction(txXdr: string) {
-    return window.freighter.signTransaction(txXdr, {
-      networkPassphrase: 'Test SDF Network ; September 2015',
-    }).then(r => r.signedTxXdr);
+    return window.freighter
+      .signTransaction(txXdr, {
+        networkPassphrase: "Test SDF Network ; September 2015",
+      })
+      .then((r) => r.signedTxXdr);
   },
 };
 
-await propfi.fractionVault.buyFraction('G...', 1, 10n, signer);
+await propfi.fractionVault.buyFraction("G...", 1, 10n, signer);
 ```
 
 ---

@@ -10,7 +10,6 @@ members = [
     "contracts/oracle_adapter",
     "contracts/compliance_registry",
     "contracts/governance",
-    "contracts/integration_tests",
 ]
 
 [profile.release]

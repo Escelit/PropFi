@@ -10,6 +10,9 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "lint": "eslint .",
+    "fmt": "prettier --write .",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

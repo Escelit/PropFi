@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
+    "lint": "eslint .",
+    "fmt": "prettier --write .",
+    "test": "vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
