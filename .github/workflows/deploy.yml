@@ -27,7 +27,11 @@ jobs:
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
+      - name: Build contracts (always runs to check build)
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --workspace --exclude propfi-integration-tests
       - name: Create .env and configure soroban keys
+        if: ${{ secrets.ADMIN_SECRET_KEY != '' }}
         run: |
           cat > .env <<EOF
           ADMIN_KEY_NAME=deployer
@@ -37,6 +41,7 @@ jobs:
           # Use --secret-key directly with the value
           soroban keys add deployer --secret-key "${{ secrets.ADMIN_SECRET_KEY }}" --network testnet
       - name: Deploy contracts
+        if: ${{ secrets.ADMIN_SECRET_KEY != '' }}
         run: |
           ./scripts/deploy.sh --network testnet
 
@@ -58,7 +63,11 @@ jobs:
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
+      - name: Build contracts (always runs to check build)
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --workspace --exclude propfi-integration-tests
       - name: Create .env and configure soroban keys
+        if: ${{ secrets.ADMIN_SECRET_KEY != '' }}
         run: |
           cat > .env <<EOF
           ADMIN_KEY_NAME=deployer
@@ -72,5 +81,6 @@ jobs:
           # Use --secret-key directly with the value
           soroban keys add deployer --secret-key "${{ secrets.ADMIN_SECRET_KEY }}" --network mainnet
       - name: Deploy contracts
+        if: ${{ secrets.ADMIN_SECRET_KEY != '' }}
         run: |
           ./scripts/deploy.sh --network mainnet --confirm
