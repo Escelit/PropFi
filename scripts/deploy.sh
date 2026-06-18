@@ -49,7 +49,7 @@ echo ""
 
 # ── Build all contracts ────────────────────────────────────────────────
 echo "=== Building all contracts ==="
-cargo build --target wasm32-unknown-unknown --release --workspace
+cargo build --target wasm32-unknown-unknown --release --workspace --exclude propfi-integration-tests
 echo "Build complete."
 echo ""
 
