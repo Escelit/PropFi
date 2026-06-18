@@ -57,16 +57,15 @@ echo ""
 deploy_contract() {
   local name="$1"
   local wasm_file="$2"
-  echo "Deploying $name ..."
-  $SOROBAN contract deploy \
+  echo "Deploying $name ..." >&2
+  local output
+  output=$($SOROBAN contract deploy \
     --wasm "$BUILD_DIR/$wasm_file" \
     --source "$ADMIN_KEY_NAME" \
-    --network "$NETWORK" \
-    --alias "$name" 2>&1 | tee deploy_output.txt
+    --network "$NETWORK" 2>&1)
   local contract_id
-  contract_id=$(cat deploy_output.txt | grep -oE '[A-Z0-9]{56}')
-  echo "  -> $name deployed at $contract_id"
-  rm deploy_output.txt
+  contract_id=$(echo "$output" | grep -oE '[A-Z0-9]{56}')
+  echo "  -> $name deployed at $contract_id" >&2
   echo "$contract_id"
 }
 
