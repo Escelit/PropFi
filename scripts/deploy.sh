@@ -63,8 +63,12 @@ deploy_contract() {
     --wasm "$BUILD_DIR/$wasm_file" \
     --source "$ADMIN_KEY_NAME" \
     --network "$NETWORK" 2>&1)
+  echo "RAW DEPLOY OUTPUT:" >&2
+  echo "-------------------" >&2
+  echo "$output" >&2
+  echo "-------------------" >&2
   local contract_id
-  contract_id=$(echo "$output" | grep -oE '[A-Z0-9]{56}')
+  contract_id=$(echo "$output" | grep -oE '[A-Z0-9]{56}' | head -1)
   echo "  -> $name deployed at $contract_id" >&2
   echo "$contract_id"
 }
