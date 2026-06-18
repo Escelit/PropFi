@@ -243,7 +243,7 @@ mod test {
     use propfi_compliance_registry::{ComplianceRegistry, ComplianceRegistryClient};
     use propfi_fraction_vault::{FractionVault, FractionVaultClient};
     use propfi_property_registry::{PropertyRegistry, PropertyRegistryClient};
-    use soroban_sdk::testutils::{Address as _};
+    use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{symbol_short, BytesN, Env};
 
     fn setup() -> (
