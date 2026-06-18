@@ -27,13 +27,14 @@ jobs:
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
-      - name: Create .env
+      - name: Create .env and configure soroban keys
         run: |
           cat > .env <<EOF
-          ADMIN_KEY_NAME=${{ secrets.ADMIN_KEY_NAME }}
+          ADMIN_KEY_NAME=deployer
           ADMIN_PUBLIC_KEY=${{ secrets.ADMIN_PUBLIC_KEY }}
           STALENESS_THRESHOLD=${{ vars.STALENESS_THRESHOLD || '3600' }}
           EOF
+          echo "${{ secrets.ADMIN_SECRET_KEY }}" | soroban keys add deployer --secret-key - --network testnet
       - name: Deploy contracts
         run: |
           ./scripts/deploy.sh --network testnet
@@ -56,10 +57,10 @@ jobs:
       - name: Install soroban-cli
         run: |
           cargo install soroban-cli --locked
-      - name: Create .env
+      - name: Create .env and configure soroban keys
         run: |
           cat > .env <<EOF
-          ADMIN_KEY_NAME=${{ secrets.ADMIN_KEY_NAME }}
+          ADMIN_KEY_NAME=deployer
           ADMIN_PUBLIC_KEY=${{ secrets.ADMIN_PUBLIC_KEY }}
           STALENESS_THRESHOLD=${{ vars.STALENESS_THRESHOLD || '3600' }}
           USDC_CONTRACT_ID=${{ secrets.USDC_CONTRACT_ID }}
@@ -67,6 +68,7 @@ jobs:
           ORACLE_PUBLIC_KEYS=${{ secrets.ORACLE_PUBLIC_KEYS }}
           ORACLE_WEIGHTS=${{ vars.ORACLE_WEIGHTS || '' }}
           EOF
+          echo "${{ secrets.ADMIN_SECRET_KEY }}" | soroban keys add deployer --secret-key - --network mainnet
       - name: Deploy contracts
         run: |
           ./scripts/deploy.sh --network mainnet --confirm
