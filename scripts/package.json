@@ -6,7 +6,7 @@
     "seed": "npx ts-node seed_data.ts"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^12.1.0",
+    "@stellar/stellar-sdk": "^16.1.0",
     "dotenv": "^16.4.0"
   },
   "devDependencies": {
