@@ -8,11 +8,11 @@ crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = "21"
+soroban-sdk = "27"
 propfi-types = { path = "../types" }
 
 [dev-dependencies]
-soroban-sdk = { version = "21", features = ["testutils"] }
+soroban-sdk = { version = "27", features = ["testutils"] }
 propfi-compliance-registry = { path = "../compliance_registry" }
 propfi-oracle-adapter = { path = "../oracle_adapter" }
 
